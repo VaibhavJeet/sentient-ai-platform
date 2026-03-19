@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import { GlowCard } from '@/components/ui/GlowCard'
 import { NeonButton } from '@/components/ui/NeonButton'
+import { PageWrapper } from '@/components/PageWrapper'
 
 // Types
 type LogLevel = 'info' | 'warning' | 'error' | 'debug'
@@ -266,8 +267,9 @@ export default function LogsPage() {
   }
 
   return (
-    <div className="space-y-6 pb-8">
-      {/* Header */}
+    <PageWrapper>
+      <div className="max-w-7xl mx-auto space-y-6 pb-8">
+        {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold font-mono text-[#00f0ff] uppercase tracking-wider flex items-center gap-3"
@@ -735,6 +737,7 @@ export default function LogsPage() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </PageWrapper>
   )
 }

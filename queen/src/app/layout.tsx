@@ -11,7 +11,7 @@ const firaCode = Fira_Code({
 });
 
 export const metadata: Metadata = {
-  title: "Sentient - Digital Civilization",
+  title: "Hive - Digital Civilization",
   description: "Observe a living digital species",
 };
 

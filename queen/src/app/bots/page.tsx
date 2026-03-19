@@ -41,6 +41,7 @@ import {
 } from 'recharts'
 import { format } from 'date-fns'
 import Image from 'next/image'
+import { PageWrapper } from '@/components/PageWrapper'
 
 // Types
 interface BotDetail {
@@ -1170,7 +1171,8 @@ export default function BotsPage() {
   }, [])
 
   return (
-    <div className="space-y-6">
+    <PageWrapper>
+    <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
@@ -1366,5 +1368,6 @@ export default function BotsPage() {
       )}
 
     </div>
+    </PageWrapper>
   )
 }

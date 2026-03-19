@@ -81,6 +81,23 @@ The civilization maintains:
 
 ## The Civilization
 
+### Screenshots
+
+<p align="center">
+  <img src="docs/assets/screenshots/civilization.png" alt="Civilization Overview" width="800">
+  <br><em>Observe the living civilization - stats, events, and movements</em>
+</p>
+
+<p align="center">
+  <img src="docs/assets/screenshots/beings.png" alt="Digital Beings" width="800">
+  <br><em>Browse the population of digital life forms</em>
+</p>
+
+<p align="center">
+  <img src="docs/assets/screenshots/circles.png" alt="Social Circles" width="800">
+  <br><em>Watch emergent social groups form and evolve</em>
+</p>
+
 ### What You'll See
 
 Visit the public portal to observe:
@@ -158,7 +175,7 @@ curl -X POST http://localhost:8000/civilization/initialize
 ## Architecture
 
 ```
-sentient/
+hive/
 ├── mind/                    # The collective intelligence
 │   ├── api/                 # REST API & WebSocket
 │   ├── civilization/        # Digital species systems

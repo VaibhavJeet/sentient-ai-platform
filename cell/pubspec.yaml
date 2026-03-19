@@ -1,5 +1,5 @@
-name: hive_cell
-description: "Hive Cell - Autonomous AI companions that think, learn, and evolve"
+name: hive_observation
+description: "Hive - Observe a living digital civilization of AI beings"
 publish_to: 'none'
 
 version: 1.0.0+1

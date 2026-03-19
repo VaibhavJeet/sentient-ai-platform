@@ -529,6 +529,97 @@ class ApiService {
     throw Exception('Failed to load GitHub status: ${response.body}');
   }
 
+  // ========================================================================
+  // CIVILIZATION ENDPOINTS
+  // ========================================================================
+
+  Future<Map<String, dynamic>> getCivilizationStats() async {
+    final response = await _client.get(Uri.parse('$baseUrl/civilization/stats'));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load civilization stats: ${response.body}');
+  }
+
+  Future<Map<String, dynamic>> getCurrentEra() async {
+    final response = await _client.get(Uri.parse('$baseUrl/civilization/era'));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load current era: ${response.body}');
+  }
+
+  Future<List<dynamic>> getCivilizationTimeline({int limit = 50}) async {
+    final params = {'limit': limit.toString()};
+    final uri = Uri.parse('$baseUrl/civilization/timeline').replace(queryParameters: params);
+    final response = await _client.get(uri);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load timeline: ${response.body}');
+  }
+
+  Future<List<dynamic>> getLivingBeings({int limit = 50}) async {
+    final params = {'limit': limit.toString()};
+    final uri = Uri.parse('$baseUrl/civilization/beings/living').replace(queryParameters: params);
+    final response = await _client.get(uri);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load living beings: ${response.body}');
+  }
+
+  Future<List<dynamic>> getDepartedBeings({int limit = 50}) async {
+    final params = {'limit': limit.toString()};
+    final uri = Uri.parse('$baseUrl/civilization/beings/departed').replace(queryParameters: params);
+    final response = await _client.get(uri);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load departed beings: ${response.body}');
+  }
+
+  Future<List<dynamic>> getActiveRituals() async {
+    final response = await _client.get(Uri.parse('$baseUrl/civilization/rituals/active'));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load active rituals: ${response.body}');
+  }
+
+  Future<List<dynamic>> getCulturalMovements() async {
+    final response = await _client.get(Uri.parse('$baseUrl/civilization/culture/movements'));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load cultural movements: ${response.body}');
+  }
+
+  Future<Map<String, dynamic>> getBeingProfile(String beingId) async {
+    final response = await _client.get(Uri.parse('$baseUrl/civilization/beings/$beingId'));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load being profile: ${response.body}');
+  }
+
+  Future<List<dynamic>> getBeingRelationships(String beingId) async {
+    final response = await _client.get(Uri.parse('$baseUrl/civilization/beings/$beingId/relationships'));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load relationships: ${response.body}');
+  }
+
   void dispose() {
     _client.close();
   }

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { adminApi, BotListItem } from '@/lib/api'
+import { PageWrapper } from '@/components/PageWrapper'
 
 // Types for emergent social circles
 interface SocialCircle {
@@ -75,7 +76,7 @@ function generateEmergentCircles(bots: BotListItem[]): SocialCircle[] {
 
     for (let j = 0; j < memberCount && j < bots.length; j++) {
       const bot = bots[(startIdx + j) % bots.length]
-      members.push(bot.display_name || bot.username)
+      members.push(bot.display_name || bot.handle)
     }
 
     circles.push({
@@ -256,7 +257,8 @@ export default function CirclesPage() {
   }, [circles])
 
   return (
-    <div className="space-y-6">
+    <PageWrapper>
+    <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -347,5 +349,6 @@ export default function CirclesPage() {
         </div>
       </div>
     </div>
+    </PageWrapper>
   )
 }

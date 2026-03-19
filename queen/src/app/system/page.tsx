@@ -36,6 +36,7 @@ import { ProgressRing } from '@/components/ui/ProgressRing'
 import { StatusIndicator } from '@/components/ui/StatusIndicator'
 import { NeonButton } from '@/components/ui/NeonButton'
 import { Terminal, createLogEntry } from '@/components/ui/Terminal'
+import { PageWrapper } from '@/components/PageWrapper'
 
 interface HealthCheck {
   name: string
@@ -303,8 +304,9 @@ export default function SystemPage() {
   const services = getServiceData()
 
   return (
-    <div className="space-y-6 pb-8">
-      {/* System Status Banner */}
+    <PageWrapper>
+      <div className="max-w-7xl mx-auto space-y-6 pb-8">
+        {/* System Status Banner */}
       <GlowCard
         glowColor={overallStatus === 'operational' ? 'green' : overallStatus === 'degraded' ? 'amber' : 'magenta'}
         className="p-6"
@@ -777,6 +779,7 @@ export default function SystemPage() {
           </div>
         </div>
       </GlowCard>
-    </div>
+      </div>
+    </PageWrapper>
   )
 }

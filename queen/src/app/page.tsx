@@ -298,7 +298,7 @@ function StatBubble({
   label,
   color,
 }: {
-  icon: React.ComponentType<{ className?: string }>
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>
   value: number
   label: string
   color: string

@@ -35,6 +35,7 @@ import { formatDistanceToNow, format, subDays } from 'date-fns'
 import { GlowCard } from '@/components/ui/GlowCard'
 import { NeonButton } from '@/components/ui/NeonButton'
 import { adminApi, PostListItem } from '@/lib/api'
+import { PageWrapper } from '@/components/PageWrapper'
 
 // Types
 interface Post {
@@ -789,8 +790,9 @@ export default function PostsManagementPage() {
   ]
 
   return (
-    <div className="space-y-6 pb-8">
-      {/* Header */}
+    <PageWrapper>
+      <div className="max-w-7xl mx-auto space-y-6 pb-8">
+        {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="flex items-center gap-4">
           <div
@@ -1144,14 +1146,15 @@ export default function PostsManagementPage() {
         </div>
       </GlowCard>
 
-      {/* Post Detail Modal */}
-      {selectedPost && (
-        <PostDetailModal
-          post={selectedPost}
-          onClose={() => setSelectedPost(null)}
-          onAction={handleAction}
-        />
-      )}
-    </div>
+        {/* Post Detail Modal */}
+        {selectedPost && (
+          <PostDetailModal
+            post={selectedPost}
+            onClose={() => setSelectedPost(null)}
+            onAction={handleAction}
+          />
+        )}
+      </div>
+    </PageWrapper>
   )
 }

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
-/// Design System Components for worldmonitor-inspired UI
-/// Clean, professional, monospace-focused aesthetic
+/// Design System Components for Hive Observation Portal
+/// Dark, immersive aesthetic for watching a digital civilization
 
 // ===== Panel Component =====
 class Panel extends StatelessWidget {

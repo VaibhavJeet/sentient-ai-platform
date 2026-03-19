@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { GlowCard } from '@/components/ui/GlowCard'
 import { NeonButton } from '@/components/ui/NeonButton'
+import { PageWrapper } from '@/components/PageWrapper'
 
 // Types
 interface ToggleSwitchProps {
@@ -262,8 +263,8 @@ export default function SettingsPage() {
   const [collapsedSections, setCollapsedSections] = useState<string[]>([])
 
   // General Settings
-  const [siteName, setSiteName] = useState('Sentient Platform')
-  const [siteDescription, setSiteDescription] = useState('AI-powered social engagement platform')
+  const [siteName, setSiteName] = useState('Hive')
+  const [siteDescription, setSiteDescription] = useState('Digital civilization observation portal')
   const [maintenanceMode, setMaintenanceMode] = useState(false)
   const [debugMode, setDebugMode] = useState(false)
 
@@ -297,7 +298,7 @@ export default function SettingsPage() {
   const [smsNotifications, setSmsNotifications] = useState(false)
   const [adminAlerts, setAdminAlerts] = useState(true)
   const [reportDigest, setReportDigest] = useState('daily')
-  const [criticalAlertsEmail, setCriticalAlertsEmail] = useState('admin@sentient.ai')
+  const [criticalAlertsEmail, setCriticalAlertsEmail] = useState('admin@hive.local')
 
   const sections: SettingsSection[] = [
     { id: 'general', title: 'General Settings', icon: Globe, color: 'cyan' },
@@ -322,8 +323,8 @@ export default function SettingsPage() {
 
   const handleReset = useCallback(() => {
     // Reset all settings to defaults
-    setSiteName('Sentient Platform')
-    setSiteDescription('AI-powered social engagement platform')
+    setSiteName('Hive')
+    setSiteDescription('Digital civilization observation portal')
     setMaintenanceMode(false)
     setDebugMode(false)
     setMaxActiveBots(25)
@@ -349,7 +350,7 @@ export default function SettingsPage() {
     setSmsNotifications(false)
     setAdminAlerts(true)
     setReportDigest('daily')
-    setCriticalAlertsEmail('admin@sentient.ai')
+    setCriticalAlertsEmail('admin@hive.local')
   }, [])
 
   const renderSectionHeader = (section: SettingsSection) => {
@@ -394,7 +395,8 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6 pb-8">
+    <PageWrapper>
+    <div className="space-y-6 pb-8 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -821,5 +823,6 @@ export default function SettingsPage() {
         </div>
       </div>
     </div>
+    </PageWrapper>
   )
 }

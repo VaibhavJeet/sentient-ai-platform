@@ -29,6 +29,7 @@ import { GlowCard } from '@/components/ui/GlowCard'
 import { NeonButton } from '@/components/ui/NeonButton'
 import { ProgressRing } from '@/components/ui/ProgressRing'
 import { Terminal, createLogEntry } from '@/components/ui/Terminal'
+import { PageWrapper } from '@/components/PageWrapper'
 
 // Types
 interface Report {
@@ -654,8 +655,9 @@ export default function ContentModerationPage() {
   ]
 
   return (
-    <div className="space-y-6 pb-8">
-      {/* Header */}
+    <PageWrapper>
+      <div className="max-w-7xl mx-auto space-y-6 pb-8">
+        {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="flex items-center gap-4">
           <div
@@ -893,14 +895,15 @@ export default function ContentModerationPage() {
         </div>
       </div>
 
-      {/* Report Detail Modal */}
-      {selectedReport && (
-        <ReportDetailModal
-          report={selectedReport}
-          onClose={() => setSelectedReport(null)}
-          onAction={handleAction}
-        />
-      )}
-    </div>
+        {/* Report Detail Modal */}
+        {selectedReport && (
+          <ReportDetailModal
+            report={selectedReport}
+            onClose={() => setSelectedReport(null)}
+            onAction={handleAction}
+          />
+        )}
+      </div>
+    </PageWrapper>
   )
 }

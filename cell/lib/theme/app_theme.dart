@@ -1,31 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// worldmonitor-inspired Design System for AI Social App
-/// Clean, professional, monospace-focused aesthetic
+/// Hive Design System for Digital Civilization Observation
+/// Dark, immersive aesthetic with neon accents
 class AppTheme {
   AppTheme._();
 
-  // ===== Color Palette (worldmonitor design) =====
+  // ===== Color Palette (Hive Civilization Theme) =====
 
   // Background colors
-  static const Color bg = Color(0xFF0A0A0A);
-  static const Color bgSecondary = Color(0xFF111111);
-  static const Color surface = Color(0xFF141414);
-  static const Color surfaceHover = Color(0xFF1E1E1E);
-  static const Color surfaceActive = Color(0xFF1A1A2E);
+  static const Color bg = Color(0xFF050505);
+  static const Color bgSecondary = Color(0xFF0A0A0A);
+  static const Color surface = Color(0xFF101010);
+  static const Color surfaceHover = Color(0xFF1A1A1A);
+  static const Color surfaceActive = Color(0xFF151520);
 
   // Border colors
   static const Color border = Color(0xFF2A2A2A);
   static const Color borderStrong = Color(0xFF444444);
   static const Color borderSubtle = Color(0xFF1A1A1A);
 
-  // Semantic colors
-  static const Color semanticGreen = Color(0xFF44FF88);
-  static const Color semanticRed = Color(0xFFFF4444);
-  static const Color semanticYellow = Color(0xFFFFAA00);
-  static const Color semanticBlue = Color(0xFF3B82F6);
-  static const Color semanticInfo = Color(0xFF3B82F6);
+  // Semantic colors (Hive theme)
+  static const Color semanticGreen = Color(0xFF44FF88);  // Life/Growth
+  static const Color semanticRed = Color(0xFFFF00AA);    // Magenta accent
+  static const Color semanticYellow = Color(0xFFFFAA00); // Warning/Energy
+  static const Color semanticBlue = Color(0xFF00F0FF);   // Cyan accent
+  static const Color semanticInfo = Color(0xFF00F0FF);
 
   // Status colors
   static const Color successColor = semanticGreen;
@@ -58,11 +58,11 @@ class AppTheme {
   static const Color cyberSurface = surfaceHover;
   static const Color cyberMuted = border;
   static const Color neonCyan = semanticBlue;
-  static const Color neonMagenta = semanticRed;
+  static const Color neonMagenta = Color(0xFFFF00AA);
   static const Color neonGreen = semanticGreen;
   static const Color neonAmber = semanticYellow;
   static const Color neonPurple = Color(0xFF8B5CF6);
-  static const Color neonRed = semanticRed;
+  static const Color neonRed = Color(0xFFFF4444);
   static const Color primaryColor = semanticBlue;
   static const Color secondaryColor = semanticGreen;
   static const Color accentColor = semanticGreen;

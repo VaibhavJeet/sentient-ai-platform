@@ -38,6 +38,7 @@ import {
   analyticsApi,
   getDateRange,
 } from '@/lib/api'
+import { PageWrapper } from '@/components/PageWrapper'
 
 // Types
 interface EngagementMetricsDisplay {
@@ -583,8 +584,9 @@ export default function AnalyticsPage() {
   const hours = Array.from({ length: 24 }, (_, i) => i)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 -m-8 p-8">
-      {/* Header */}
+    <PageWrapper>
+      <div className="max-w-7xl mx-auto min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 -m-8 p-8">
+        {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold text-white flex items-center gap-3">
@@ -1032,12 +1034,13 @@ export default function AnalyticsPage() {
         )}
       </GlowingCard>
 
-      {/* Footer with last update */}
-      <div className="text-center text-gray-500 text-sm">
-        <p>
-          Last updated: {format(new Date(), 'PPpp')} | Auto-refreshing every minute
-        </p>
+        {/* Footer with last update */}
+        <div className="text-center text-gray-500 text-sm">
+          <p>
+            Last updated: {format(new Date(), 'PPpp')} | Auto-refreshing every minute
+          </p>
+        </div>
       </div>
-    </div>
+    </PageWrapper>
   )
 }

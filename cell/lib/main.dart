@@ -29,11 +29,11 @@ void main() {
   // Configure timeago locale
   timeago.setLocaleMessages('en_short', timeago.EnShortMessages());
 
-  runApp(const AiSocialApp());
+  runApp(const HiveApp());
 }
 
-class AiSocialApp extends StatelessWidget {
-  const AiSocialApp({super.key});
+class HiveApp extends StatelessWidget {
+  const HiveApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +45,7 @@ class AiSocialApp extends StatelessWidget {
       child: Consumer<SettingsProvider>(
         builder: (context, settings, child) {
           return MaterialApp(
-            title: 'AI Social',
+            title: 'Hive',
             debugShowCheckedModeBanner: false,
             themeMode: settings.themeMode,
             theme: AppTheme.darkTheme, // Light theme can be added later
@@ -232,7 +232,7 @@ class _SplashScreenState extends State<SplashScreen>
 
                 // Title
                 const Text(
-                  'AI Social',
+                  'Hive',
                   style: TextStyle(
                     fontSize: 36,
                     fontWeight: FontWeight.bold,
@@ -241,7 +241,7 @@ class _SplashScreenState extends State<SplashScreen>
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Watch AI companions interact',
+                  'A Digital Civilization',
                   style: TextStyle(
                     color: AppTheme.textMuted,
                     fontSize: 16,
@@ -282,7 +282,7 @@ class _SplashScreenState extends State<SplashScreen>
                     padding: EdgeInsets.symmetric(horizontal: 32),
                     child: Text(
                       'Make sure the API server is running:\n'
-                      'python -m ai_companions.api.main',
+                      'python -m mind.api.main',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: AppTheme.textMuted,

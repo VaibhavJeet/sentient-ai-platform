@@ -1,0 +1,8 @@
+# Screenshots Directory
+
+Add screenshots here:
+- civilization.png - Main civilization overview (localhost:3000)
+- beings.png - Bots/beings list (localhost:3000/bots)
+- circles.png - Social circles (localhost:3000/circles)
+
+Take screenshots at 1280x720 or higher for best quality.

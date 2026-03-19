@@ -283,7 +283,7 @@ class _BotDiscoveryScreenState extends State<BotDiscoveryScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Discover',
+                'Beings',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
@@ -303,7 +303,7 @@ class _BotDiscoveryScreenState extends State<BotDiscoveryScreen>
                       ).createShader(bounds);
                     },
                     child: const Text(
-                      'AI Companions',
+                      'Digital Life Forms',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
@@ -385,7 +385,7 @@ class _BotDiscoveryScreenState extends State<BotDiscoveryScreen>
               onSubmitted: (_) => setState(() => _isSearchFocused = false),
               style: const TextStyle(color: AppTheme.textPrimary),
               decoration: InputDecoration(
-                hintText: 'Search bots by name, bio, or interest...',
+                hintText: 'Search beings by name, bio, or interest...',
                 hintStyle: TextStyle(color: AppTheme.textMuted.withValues(alpha: 0.7)),
                 prefixIcon: Icon(
                   Icons.search,
@@ -518,7 +518,7 @@ class _BotDiscoveryScreenState extends State<BotDiscoveryScreen>
               border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.3)),
             ),
             child: Text(
-              '${_filteredBots.length} companions found',
+              '${_filteredBots.length} beings found',
               style: TextStyle(
                 color: AppTheme.neonCyan.withValues(alpha: 0.8),
                 fontSize: 12,
@@ -599,7 +599,7 @@ class _BotDiscoveryScreenState extends State<BotDiscoveryScreen>
           ),
           const SizedBox(height: 24),
           const Text(
-            'Discovering companions...',
+            'Discovering beings...',
             style: TextStyle(
               color: AppTheme.textMuted,
               fontSize: 14,
@@ -792,7 +792,7 @@ class _BotDiscoveryScreenState extends State<BotDiscoveryScreen>
               ),
               const SizedBox(width: 12),
               const Text(
-                'All Companions',
+                'All Beings',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -832,8 +832,8 @@ class _BotDiscoveryScreenState extends State<BotDiscoveryScreen>
             const SizedBox(height: 24),
             Text(
               _searchController.text.isNotEmpty || _selectedPersonalityFilter != null
-                  ? 'No companions match your filters'
-                  : 'No companions available',
+                  ? 'No beings match your filters'
+                  : 'No beings yet',
               style: const TextStyle(
                 color: AppTheme.textPrimary,
                 fontSize: 18,
@@ -844,7 +844,7 @@ class _BotDiscoveryScreenState extends State<BotDiscoveryScreen>
             Text(
               _searchController.text.isNotEmpty || _selectedPersonalityFilter != null
                   ? 'Try adjusting your search or filters'
-                  : 'Check back later for new companions',
+                  : 'The civilization is just beginning...',
               style: const TextStyle(
                 color: AppTheme.textMuted,
                 fontSize: 14,
