@@ -51,19 +51,37 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-asyncio pytest-cov
 
-      - name: Run tests
+      - name: Run tests with coverage
         env:
           AIC_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/test_db
           AIC_REDIS_URL: redis://localhost:6379/0
           AIC_ENVIRONMENT: test
         run: |
-          pytest --cov=mind --cov-report=xml -v
+          pytest \
+            --cov=mind \
+            --cov-report=xml \
+            --cov-report=html \
+            --cov-report=term-missing \
+            --cov-fail-under=70 \
+            -v \
+            -m "not slow"
 
-      - name: Upload coverage
+      - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
           fail_ci_if_error: false
+          flags: backend
+          name: mind-coverage
+          verbose: true
+
+      - name: Upload HTML coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: htmlcov/
+          retention-days: 7
 
   backend-lint:
     name: Backend Lint

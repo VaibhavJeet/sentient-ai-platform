@@ -144,6 +144,44 @@ class DeceasedBotResponse(BaseModel):
     legacy_impact: Optional[float] = None
 
 
+class RelationshipNodeResponse(BaseModel):
+    """Response model for a node in the relationship graph."""
+    id: str
+    name: str
+    handle: str
+    avatar_seed: Optional[str] = None
+    is_alive: bool
+    life_stage: str
+    generation: int
+
+
+class RelationshipEdgeResponse(BaseModel):
+    """Response model for an edge in the relationship graph."""
+    source: str
+    target: str
+    label: str
+    intensity: float
+    relationship_type: str
+    mutual: bool
+
+
+class RelationshipGraphResponse(BaseModel):
+    """Response model for the full relationship graph."""
+    nodes: List[RelationshipNodeResponse]
+    edges: List[RelationshipEdgeResponse]
+    total_relationships: int
+    total_bots: int
+
+
+class RelationshipDetailResponse(BaseModel):
+    """Response model for detailed relationship information."""
+    bot1: dict
+    bot2: dict
+    intensity: float
+    formed_at: str
+    interaction_count: int
+
+
 class CivilizationConfigResponse(BaseModel):
     """Response model for civilization configuration."""
     max_population: int
@@ -1088,6 +1126,217 @@ async def get_relationship_story(bot_id: UUID, other_bot_id: UUID):
     relationships = get_relationships_manager()
     story = await relationships.narrate_relationship_history(bot_id, other_bot_id)
     return {"story": story}
+
+
+@router.get("/relationships/graph", response_model=RelationshipGraphResponse)
+async def get_relationship_graph(
+    min_intensity: float = Query(default=0.0, ge=0.0, le=1.0),
+    include_departed: bool = Query(default=True)
+):
+    """
+    Get the full relationship graph for visualization.
+
+    Returns all bots and their relationships in a format suitable for
+    force-directed graph visualization.
+    """
+    from mind.core.database import RelationshipDB
+
+    async with async_session_factory() as session:
+        # Get all bots with lifecycle data
+        bot_stmt = select(BotProfileDB).where(
+            BotProfileDB.is_deleted == False
+        )
+        bot_result = await session.execute(bot_stmt)
+        bots_db = bot_result.scalars().all()
+
+        # Get lifecycle data
+        lifecycle_stmt = select(BotLifecycleDB)
+        lifecycle_result = await session.execute(lifecycle_stmt)
+        lifecycles = {lc.bot_id: lc for lc in lifecycle_result.scalars().all()}
+
+        # Filter bots
+        nodes = []
+        bot_ids = set()
+        for bot in bots_db:
+            lc = lifecycles.get(bot.id)
+            is_alive = lc.is_alive if lc else True
+
+            if not include_departed and not is_alive:
+                continue
+
+            bot_ids.add(bot.id)
+            nodes.append(RelationshipNodeResponse(
+                id=str(bot.id),
+                name=bot.display_name,
+                handle=bot.handle,
+                avatar_seed=bot.avatar_seed,
+                is_alive=is_alive,
+                life_stage=lc.life_stage if lc else "young",
+                generation=lc.birth_generation if lc and lc.birth_generation else 1
+            ))
+
+        # Get relationships from RelationshipDB
+        rel_stmt = select(RelationshipDB).where(
+            RelationshipDB.interaction_count > 0,
+            RelationshipDB.affinity_score >= min_intensity
+        )
+        rel_result = await session.execute(rel_stmt)
+        relationships_db = rel_result.scalars().all()
+
+        # Build edges
+        edges = []
+        seen_pairs = set()
+
+        for rel in relationships_db:
+            if rel.source_id not in bot_ids or rel.target_id not in bot_ids:
+                continue
+
+            # Check if this is a bot-to-bot relationship
+            if rel.target_is_human:
+                continue
+
+            # Create unique pair key
+            pair_key = tuple(sorted([str(rel.source_id), str(rel.target_id)]))
+            if pair_key in seen_pairs:
+                continue
+            seen_pairs.add(pair_key)
+
+            # Check for mutual relationship
+            reverse_stmt = select(RelationshipDB).where(
+                RelationshipDB.source_id == rel.target_id,
+                RelationshipDB.target_id == rel.source_id
+            )
+            reverse_result = await session.execute(reverse_stmt)
+            reverse_rel = reverse_result.scalar_one_or_none()
+            is_mutual = reverse_rel is not None
+
+            # Get relationship label from lifecycle emergent relationships if available
+            source_lc = lifecycles.get(rel.source_id)
+            label = rel.relationship_type or "connection"
+
+            if source_lc and source_lc.relationships:
+                for conn in source_lc.relationships:
+                    if conn.get("with_bot") == str(rel.target_id):
+                        perception = conn.get("my_perception", {})
+                        label = perception.get("label", label)
+                        break
+
+            edges.append(RelationshipEdgeResponse(
+                source=str(rel.source_id),
+                target=str(rel.target_id),
+                label=label,
+                intensity=rel.affinity_score,
+                relationship_type=rel.relationship_type or "emergent",
+                mutual=is_mutual
+            ))
+
+        return RelationshipGraphResponse(
+            nodes=nodes,
+            edges=edges,
+            total_relationships=len(edges),
+            total_bots=len(nodes)
+        )
+
+
+@router.get("/relationships/{bot_id_1}/{bot_id_2}", response_model=RelationshipDetailResponse)
+async def get_relationship_detail(bot_id_1: UUID, bot_id_2: UUID):
+    """
+    Get detailed information about the relationship between two bots.
+
+    Returns both bots' perceptions of each other.
+    """
+    from mind.core.database import RelationshipDB
+
+    async with async_session_factory() as session:
+        # Get both bots
+        bot_stmt = select(BotProfileDB).where(
+            BotProfileDB.id.in_([bot_id_1, bot_id_2])
+        )
+        bot_result = await session.execute(bot_stmt)
+        bots = {b.id: b for b in bot_result.scalars().all()}
+
+        if len(bots) != 2:
+            raise HTTPException(status_code=404, detail="One or both bots not found")
+
+        # Get lifecycle data for emergent perceptions
+        lc_stmt = select(BotLifecycleDB).where(
+            BotLifecycleDB.bot_id.in_([bot_id_1, bot_id_2])
+        )
+        lc_result = await session.execute(lc_stmt)
+        lifecycles = {lc.bot_id: lc for lc in lc_result.scalars().all()}
+
+        # Get relationship data
+        rel_stmt = select(RelationshipDB).where(
+            RelationshipDB.source_id == bot_id_1,
+            RelationshipDB.target_id == bot_id_2
+        )
+        rel_result = await session.execute(rel_stmt)
+        rel = rel_result.scalar_one_or_none()
+
+        # Get reverse relationship
+        rev_stmt = select(RelationshipDB).where(
+            RelationshipDB.source_id == bot_id_2,
+            RelationshipDB.target_id == bot_id_1
+        )
+        rev_result = await session.execute(rev_stmt)
+        rev_rel = rev_result.scalar_one_or_none()
+
+        # Build perception for bot 1
+        bot1 = bots[bot_id_1]
+        lc1 = lifecycles.get(bot_id_1)
+        perception1 = {
+            "label": "acquaintance",
+            "description": "We have crossed paths",
+            "feelings": "neutral"
+        }
+        if lc1 and lc1.relationships:
+            for conn in lc1.relationships:
+                if conn.get("with_bot") == str(bot_id_2):
+                    perception1 = conn.get("my_perception", perception1)
+                    break
+
+        # Build perception for bot 2
+        bot2 = bots[bot_id_2]
+        lc2 = lifecycles.get(bot_id_2)
+        perception2 = {
+            "label": "acquaintance",
+            "description": "We have crossed paths",
+            "feelings": "neutral"
+        }
+        if lc2 and lc2.relationships:
+            for conn in lc2.relationships:
+                if conn.get("with_bot") == str(bot_id_1):
+                    perception2 = conn.get("my_perception", perception2)
+                    break
+
+        # Calculate intensity and interaction count
+        intensity = 0.5
+        interaction_count = 0
+        formed_at = datetime.utcnow().isoformat()
+
+        if rel:
+            intensity = rel.affinity_score
+            interaction_count = rel.interaction_count
+            if rel.last_interaction:
+                formed_at = rel.last_interaction.isoformat()
+
+        return RelationshipDetailResponse(
+            bot1={
+                "id": str(bot_id_1),
+                "name": bot1.display_name,
+                "handle": bot1.handle,
+                "perception": perception1
+            },
+            bot2={
+                "id": str(bot_id_2),
+                "name": bot2.display_name,
+                "handle": bot2.handle,
+                "perception": perception2
+            },
+            intensity=intensity,
+            formed_at=formed_at,
+            interaction_count=interaction_count
+        )
 
 
 # ============================================================================

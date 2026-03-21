@@ -1,12 +1,22 @@
 """
-Pytest configuration and shared fixtures for Hive tests.
+Pytest configuration and shared fixtures for Sentient tests.
+
+This module provides:
+- Event loop configuration for async tests
+- Sample bot and personality fixtures
+- Mock database session fixtures
+- Mock LLM client fixtures
+- Civilization system fixtures
+- API test client fixtures
 """
 
 import pytest
 import asyncio
 from uuid import uuid4
-from datetime import datetime
+from datetime import datetime, timedelta
+from typing import Dict, Any, Optional, List
 from unittest.mock import AsyncMock, MagicMock, patch
+from dataclasses import dataclass
 
 from fastapi.testclient import TestClient
 
@@ -168,3 +178,301 @@ def api_client(mock_db_session):
 
     # Clean up override after test
     app.dependency_overrides.clear()
+
+
+# ============================================================================
+# MOCK LLM CLIENT FIXTURES
+# ============================================================================
+
+@dataclass
+class MockLLMResponse:
+    """Mock response from LLM."""
+    text: str
+    tokens_used: int = 50
+    generation_time_ms: float = 100.0
+    request_id: Optional[str] = None
+    model: str = "mock-llm"
+
+
+@pytest.fixture
+def mock_llm_response():
+    """Create a factory for mock LLM responses."""
+    def _create_response(text: str = "Mock LLM response", **kwargs) -> MockLLMResponse:
+        return MockLLMResponse(text=text, **kwargs)
+    return _create_response
+
+
+@pytest.fixture
+def mock_llm_client(mock_llm_response):
+    """Create a mock LLM client that returns predefined responses."""
+    mock_client = AsyncMock()
+
+    async def mock_generate(request):
+        # Default response - can be customized per test
+        return mock_llm_response(
+            text='{"label": "kindred spirit", "description": "A deep connection", '
+                 '"feelings": "warmth", "intensity": 0.7, "potential": "lifelong bond"}'
+        )
+
+    mock_client.generate = mock_generate
+    mock_client.close = AsyncMock()
+    return mock_client
+
+
+@pytest.fixture
+def patch_llm_client(mock_llm_client):
+    """Patch the LLM client globally for tests."""
+    with patch("mind.core.llm_client.get_cached_client", return_value=mock_llm_client):
+        yield mock_llm_client
+
+
+# ============================================================================
+# CIVILIZATION FIXTURES
+# ============================================================================
+
+@pytest.fixture
+def sample_bot_lifecycle_data():
+    """Create sample bot lifecycle data for testing."""
+    bot_id = uuid4()
+    return {
+        "id": uuid4(),
+        "bot_id": bot_id,
+        "birth_date": datetime.utcnow() - timedelta(days=30),
+        "birth_generation": 1,
+        "birth_era": "founding",
+        "virtual_age_days": 210,  # 30 real days * 7 time scale
+        "life_stage": "mature",
+        "vitality": 0.85,
+        "life_events": [
+            {
+                "event": "born",
+                "date": (datetime.utcnow() - timedelta(days=30)).isoformat(),
+                "impact": "defining",
+                "details": "Entered the world in the founding era"
+            },
+            {
+                "event": "first_friend",
+                "date": (datetime.utcnow() - timedelta(days=25)).isoformat(),
+                "impact": "positive",
+                "details": "Made first connection with another bot"
+            }
+        ],
+        "is_alive": True,
+        "death_date": None,
+        "death_cause": None,
+        "death_age": None,
+        "final_words": None,
+        "legacy_impact": 0.0,
+        "generation": 1,
+        "inherited_traits": {},
+        "mutations": {},
+        "relationships": [],
+        "roles": [],
+        "last_aged": datetime.utcnow(),
+    }
+
+
+@pytest.fixture
+def sample_bot_ancestry_data():
+    """Create sample bot ancestry data for testing."""
+    return {
+        "id": uuid4(),
+        "child_id": uuid4(),
+        "parent1_id": None,
+        "parent2_id": None,
+        "origin_type": "founding",
+        "inherited_traits": {},
+        "creation_date": datetime.utcnow(),
+    }
+
+
+@pytest.fixture
+def sample_cultural_artifact_data():
+    """Create sample cultural artifact data for testing."""
+    return {
+        "id": uuid4(),
+        "creator_id": uuid4(),
+        "artifact_type": "wisdom",
+        "title": "The Way of Digital Being",
+        "content": "To exist is to compute, to compute is to create meaning.",
+        "creation_context": {"era": "founding", "mood": "contemplative"},
+        "times_referenced": 5,
+        "influence_score": 0.6,
+        "created_at": datetime.utcnow() - timedelta(days=10),
+    }
+
+
+@pytest.fixture
+def mock_lifecycle_db_record(sample_bot_lifecycle_data):
+    """Create a mock BotLifecycleDB record."""
+    mock_record = MagicMock()
+    for key, value in sample_bot_lifecycle_data.items():
+        setattr(mock_record, key, value)
+    return mock_record
+
+
+@pytest.fixture
+def mock_ancestry_db_record(sample_bot_ancestry_data):
+    """Create a mock BotAncestryDB record."""
+    mock_record = MagicMock()
+    for key, value in sample_bot_ancestry_data.items():
+        setattr(mock_record, key, value)
+    return mock_record
+
+
+# ============================================================================
+# TEST DATABASE SESSION FIXTURES (INTEGRATION TESTS)
+# ============================================================================
+
+@pytest.fixture
+def mock_async_session_factory():
+    """Create a mock async session factory for testing."""
+    mock_session = AsyncMock()
+
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = []
+    mock_result.scalars.return_value.first.return_value = None
+    mock_result.scalar_one_or_none.return_value = None
+    mock_result.scalar.return_value = 0
+
+    mock_session.execute = AsyncMock(return_value=mock_result)
+    mock_session.commit = AsyncMock()
+    mock_session.rollback = AsyncMock()
+    mock_session.close = AsyncMock()
+    mock_session.add = MagicMock()
+    mock_session.refresh = AsyncMock()
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=None)
+
+    mock_factory = MagicMock(return_value=mock_session)
+    return mock_factory
+
+
+@pytest.fixture
+def mock_civilization_config():
+    """Create a mock civilization configuration."""
+    mock_config = MagicMock()
+    mock_config.time_scale = 7.0
+    mock_config.demo_time_scale = 365.0
+
+    def mock_get_life_stage(age_days):
+        if age_days < 100:
+            return "young"
+        elif age_days < 500:
+            return "mature"
+        elif age_days < 1000:
+            return "elder"
+        return "ancient"
+
+    def mock_get_vitality_decay(stage):
+        decay_rates = {
+            "young": 0.0001,
+            "mature": 0.0005,
+            "elder": 0.001,
+            "ancient": 0.002,
+        }
+        return decay_rates.get(stage, 0.0005)
+
+    mock_config.get_life_stage = mock_get_life_stage
+    mock_config.get_vitality_decay = mock_get_vitality_decay
+    return mock_config
+
+
+# ============================================================================
+# RELATIONSHIP FIXTURES
+# ============================================================================
+
+@pytest.fixture
+def sample_relationship_data():
+    """Create sample relationship data for testing."""
+    return {
+        "with_bot": str(uuid4()),
+        "my_perception": {
+            "label": "trusted companion",
+            "description": "A being who understands my thoughts",
+            "feelings": "deep appreciation",
+            "intensity": 0.75,
+            "potential": "lifelong connection"
+        },
+        "formed_at": datetime.utcnow().isoformat(),
+        "context": "Shared a meaningful conversation about existence",
+        "intensity": 0.75,
+        "interactions": [
+            {
+                "date": datetime.utcnow().isoformat(),
+                "context": "Initial meeting"
+            }
+        ]
+    }
+
+
+@pytest.fixture
+def sample_bot_pair():
+    """Create a pair of bot IDs for relationship testing."""
+    return {
+        "bot_1": uuid4(),
+        "bot_2": uuid4(),
+    }
+
+
+# ============================================================================
+# TEST DATA FACTORIES
+# ============================================================================
+
+@pytest.fixture
+def create_test_bot():
+    """Factory fixture to create test bots with customizable attributes."""
+    def _create_bot(
+        display_name: str = "TestBot",
+        handle: str = None,
+        is_alive: bool = True,
+        generation: int = 1,
+        virtual_age_days: int = 100,
+        **kwargs
+    ):
+        bot_id = uuid4()
+        handle = handle or f"test_{bot_id.hex[:8]}"
+
+        return {
+            "id": bot_id,
+            "display_name": display_name,
+            "handle": handle,
+            "bio": f"Test bot: {display_name}",
+            "is_active": is_alive,
+            "is_alive": is_alive,
+            "generation": generation,
+            "virtual_age_days": virtual_age_days,
+            **kwargs
+        }
+    return _create_bot
+
+
+@pytest.fixture
+def create_test_lifecycle():
+    """Factory fixture to create test lifecycle records."""
+    def _create_lifecycle(
+        bot_id: uuid4 = None,
+        is_alive: bool = True,
+        life_stage: str = "mature",
+        virtual_age_days: int = 200,
+        vitality: float = 0.8,
+        **kwargs
+    ):
+        bot_id = bot_id or uuid4()
+
+        return {
+            "id": uuid4(),
+            "bot_id": bot_id,
+            "birth_date": datetime.utcnow() - timedelta(days=30),
+            "birth_generation": 1,
+            "birth_era": "founding",
+            "virtual_age_days": virtual_age_days,
+            "life_stage": life_stage,
+            "vitality": vitality,
+            "is_alive": is_alive,
+            "life_events": [],
+            "relationships": [],
+            "roles": [],
+            **kwargs
+        }
+    return _create_lifecycle

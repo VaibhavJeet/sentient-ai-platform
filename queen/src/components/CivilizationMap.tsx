@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import * as d3 from 'd3'
 import { API_BASE_URL } from '@/lib/api'
-import { getWebSocketManager, EventHandlers } from '@/lib/websocket'
+import { useCivilizationWebSocket } from '@/hooks/useCivilizationWebSocket'
+import LiveEventFeed, { LiveEvent, EventType } from '@/components/LiveEventFeed'
 
 // ============================================================================
 // Types
@@ -674,15 +675,8 @@ function startAmbientParticles(
 // Component
 // ============================================================================
 
-interface ActivityEvent {
-  id: string
-  text: string
-  color: string
-  timestamp: number
-  sourceId?: string  // For replay — who initiated
-  targetId?: string  // For replay — who received
-  type: 'pulse' | 'asteroid' | 'evolve' | 'info'  // What animation to replay
-}
+// Show/hide the sidebar feed
+const SHOW_SIDEBAR_FEED = true
 
 export default function CivilizationMap() {
   const svgRef = useRef<SVGSVGElement>(null)
@@ -693,24 +687,45 @@ export default function CivilizationMap() {
   const [worldData, setWorldData] = useState<WorldMapData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activityFeed, setActivityFeed] = useState<ActivityEvent[]>([])
+  const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([])
   const [hoveredNode, setHoveredNode] = useState<SimNode | null>(null)
   const [zoomLevel, setZoomLevel] = useState(1)
+  const [showSidebar, setShowSidebar] = useState(SHOW_SIDEBAR_FEED)
   // Consciousness stream — latest thought per bot (for hover tooltip)
   const consciousnessRef = useRef<Map<string, { content: string; mode: string; emotion: string; time: number }>>(new Map())
   const ambientCleanupRef = useRef<(() => void) | null>(null)
 
-  const addActivity = useCallback((
-    text: string,
+  // Add a live event to the feed
+  const addLiveEvent = useCallback((
+    type: EventType,
+    title: string,
     color: string,
-    type: 'pulse' | 'asteroid' | 'evolve' | 'info' = 'info',
-    sourceId?: string,
-    targetId?: string,
+    options?: {
+      description?: string
+      botId?: string
+      targetId?: string
+      isReplayable?: boolean
+      icon?: string
+    }
   ) => {
-    setActivityFeed(prev => [
-      { id: `${Date.now()}-${Math.random()}`, text, color, timestamp: Date.now(), type, sourceId, targetId },
-      ...prev.slice(0, 19),
-    ])
+    const event: LiveEvent = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      type,
+      title,
+      color,
+      icon: options?.icon || type,
+      timestamp: Date.now(),
+      botId: options?.botId,
+      targetId: options?.targetId,
+      description: options?.description,
+      isReplayable: options?.isReplayable ?? false,
+    }
+    setLiveEvents(prev => [event, ...prev.slice(0, 99)])
+  }, [])
+
+  // Clear all events
+  const clearEvents = useCallback(() => {
+    setLiveEvents([])
   }, [])
 
   // Trigger asteroid animation between two nodes
@@ -814,68 +829,198 @@ export default function CivilizationMap() {
   }, [fetchWorldMap])
 
   // ------------------------------------------------------------------
-  // 2. WebSocket live updates — mutate worldData in place
+  // 2. WebSocket live updates — using public WebSocket connection
   // ------------------------------------------------------------------
-  useEffect(() => {
-    const ws = getWebSocketManager()
 
-    const handleDeath = (data: any) => {
+  // Animation helper for death events
+  const animateDeath = useCallback((botId: string, color: string) => {
+    const g = gRef.current
+    const nodeMap = nodeMapRef.current
+    if (!g || !nodeMap) return
+
+    const node = nodeMap.get(botId)
+    if (!node || !node.x || !node.y) return
+
+    const nx = node.x, ny = node.y
+    const nodeColor = (node as BotNode).color || color
+
+    // Expanding soul ring
+    for (let i = 0; i < 3; i++) {
+      g.append('circle')
+        .attr('cx', nx).attr('cy', ny)
+        .attr('r', 5)
+        .attr('fill', 'none')
+        .attr('stroke', i === 0 ? '#ffffff' : nodeColor)
+        .attr('stroke-width', i === 0 ? 1.5 : 0.8)
+        .attr('stroke-opacity', 0.6)
+        .transition()
+        .delay(i * 200)
+        .duration(1200)
+        .ease(d3.easeExpOut)
+        .attr('r', 40 + i * 15)
+        .attr('stroke-opacity', 0)
+        .remove()
+    }
+
+    // Particle burst — tiny dots flying outward
+    for (let i = 0; i < 8; i++) {
+      const angle = (Math.PI * 2 * i) / 8
+      g.append('circle')
+        .attr('cx', nx).attr('cy', ny)
+        .attr('r', 1.5)
+        .attr('fill', nodeColor)
+        .attr('fill-opacity', 0.8)
+        .transition()
+        .duration(800 + Math.random() * 400)
+        .ease(d3.easeQuadOut)
+        .attr('cx', nx + Math.cos(angle) * (30 + Math.random() * 20))
+        .attr('cy', ny + Math.sin(angle) * (30 + Math.random() * 20))
+        .attr('r', 0.5)
+        .attr('fill-opacity', 0)
+        .remove()
+    }
+  }, [])
+
+  // Animation helper for birth events
+  const animateBirth = useCallback((parentIds: string[], color: string) => {
+    const g = gRef.current
+    const nodeMap = nodeMapRef.current
+    if (!g || !nodeMap) return
+
+    let spawnX = 0, spawnY = 0
+    let parentColor = color
+
+    if (parentIds.length > 0) {
+      const parentNode = nodeMap.get(parentIds[0])
+      if (parentNode && parentNode.x && parentNode.y) {
+        spawnX = parentNode.x + (Math.random() - 0.5) * 30
+        spawnY = parentNode.y + (Math.random() - 0.5) * 30
+        parentColor = (parentNode as BotNode).color || color
+      }
+    }
+
+    if (spawnX) {
+      // Bright flash
+      g.append('circle')
+        .attr('cx', spawnX).attr('cy', spawnY)
+        .attr('r', 2)
+        .attr('fill', '#ffffff')
+        .attr('fill-opacity', 0.8)
+        .transition().duration(400)
+        .attr('r', 15)
+        .attr('fill-opacity', 0)
+        .remove()
+
+      // Gentle rings
+      for (let i = 0; i < 2; i++) {
+        g.append('circle')
+          .attr('cx', spawnX).attr('cy', spawnY)
+          .attr('r', 3)
+          .attr('fill', 'none')
+          .attr('stroke', parentColor)
+          .attr('stroke-width', 1)
+          .attr('stroke-opacity', 0.6)
+          .transition().delay(i * 150).duration(800)
+          .ease(d3.easeExpOut)
+          .attr('r', 22 + i * 8)
+          .attr('stroke-opacity', 0)
+          .remove()
+      }
+    }
+  }, [])
+
+  // Animation helper for migration events
+  const animateMigration = useCallback((botId: string, toCommId: string) => {
+    const g = gRef.current
+    const nodeMap = nodeMapRef.current
+    if (!g || !nodeMap) return
+
+    const botNode = nodeMap.get(botId)
+    const toComm = toCommId ? nodeMap.get(toCommId) : null
+
+    if (!botNode || !toComm || !botNode.x || !toComm.x) return
+
+    const sx = botNode.x, sy = botNode.y!
+    const tx = toComm.x, ty = toComm.y!
+    const color = (toComm as CommunityNode).color || '#ffaa00'
+
+    const dx = tx - sx, dy = ty - sy
+    const sign = Math.random() > 0.5 ? 1 : -1
+    const cx = (sx + tx) / 2 + (-dy) * 0.3 * sign
+    const cy = (sy + ty) / 2 + (dx) * 0.3 * sign
+    const arcPath = `M ${sx},${sy} Q ${cx},${cy} ${tx},${ty}`
+    const dist = Math.sqrt(dx * dx + dy * dy)
+    const duration = Math.max(800, Math.min(1500, dist * 3))
+
+    const migrationGroup = g.append('g').attr('class', 'migration')
+
+    const trail = migrationGroup.append('path')
+      .attr('d', arcPath)
+      .attr('fill', 'none')
+      .attr('stroke', color)
+      .attr('stroke-width', 3)
+      .attr('stroke-opacity', 0.5)
+      .attr('stroke-linecap', 'round')
+
+    const pathNode = trail.node() as SVGPathElement
+    if (pathNode) {
+      const totalLength = pathNode.getTotalLength()
+      trail
+        .attr('stroke-dasharray', `${totalLength} ${totalLength}`)
+        .attr('stroke-dashoffset', totalLength)
+        .transition().duration(duration).ease(d3.easeQuadInOut)
+        .attr('stroke-dashoffset', 0)
+
+      trail.transition().delay(duration).duration(600)
+        .attr('stroke-opacity', 0).remove()
+
+      const rider = migrationGroup.append('circle')
+        .attr('r', 6)
+        .attr('fill', color)
+        .attr('fill-opacity', 0.9)
+
+      const riderGlow = migrationGroup.append('circle')
+        .attr('r', 12)
+        .attr('fill', color)
+        .attr('fill-opacity', 0.15)
+
+      const animateAlong = (el: any) => {
+        el.transition().duration(duration).ease(d3.easeQuadInOut)
+          .attrTween('cx', () => (t: number) => String(pathNode.getPointAtLength(t * totalLength).x))
+          .attrTween('cy', () => (t: number) => String(pathNode.getPointAtLength(t * totalLength).y))
+      }
+      animateAlong(rider)
+      animateAlong(riderGlow)
+
+      setTimeout(() => {
+        g.append('circle')
+          .attr('cx', tx).attr('cy', ty)
+          .attr('r', 5).attr('fill', 'none')
+          .attr('stroke', color).attr('stroke-width', 2).attr('stroke-opacity', 0.7)
+          .transition().duration(600).ease(d3.easeExpOut)
+          .attr('r', 25).attr('stroke-opacity', 0).remove()
+
+        migrationGroup.transition().delay(300).remove()
+      }, duration)
+    }
+  }, [])
+
+  // WebSocket event handlers - memoized to prevent unnecessary re-renders
+  const wsHandlers = useMemo(() => ({
+    onDeath: (data: any) => {
       const botId = data.bot_id
       const words = data.final_words || ''
+      const ageDays = data.age_days || 0
 
-      // Death animation — find the node and animate it out
-      const g = gRef.current
-      const nodeMap = nodeMapRef.current
-      if (g && nodeMap) {
-        const node = nodeMap.get(botId)
-        if (node && node.x && node.y) {
-          const nx = node.x, ny = node.y
-          const color = (node as BotNode).color || '#ff3333'
+      animateDeath(botId, '#ff3333')
 
-          // Expanding soul ring
-          for (let i = 0; i < 3; i++) {
-            g.append('circle')
-              .attr('cx', nx).attr('cy', ny)
-              .attr('r', 5)
-              .attr('fill', 'none')
-              .attr('stroke', i === 0 ? '#ffffff' : color)
-              .attr('stroke-width', i === 0 ? 1.5 : 0.8)
-              .attr('stroke-opacity', 0.6)
-              .transition()
-              .delay(i * 200)
-              .duration(1200)
-              .ease(d3.easeExpOut)
-              .attr('r', 40 + i * 15)
-              .attr('stroke-opacity', 0)
-              .remove()
-          }
+      addLiveEvent('death', 'A being has passed', '#ff4444', {
+        description: words ? `"${words}"` : `Lived ${ageDays} days`,
+        botId,
+        isReplayable: true,
+      })
 
-          // Particle burst — tiny dots flying outward
-          for (let i = 0; i < 8; i++) {
-            const angle = (Math.PI * 2 * i) / 8
-            g.append('circle')
-              .attr('cx', nx).attr('cy', ny)
-              .attr('r', 1.5)
-              .attr('fill', color)
-              .attr('fill-opacity', 0.8)
-              .transition()
-              .duration(800 + Math.random() * 400)
-              .ease(d3.easeQuadOut)
-              .attr('cx', nx + Math.cos(angle) * (30 + Math.random() * 20))
-              .attr('cy', ny + Math.sin(angle) * (30 + Math.random() * 20))
-              .attr('r', 0.5)
-              .attr('fill-opacity', 0)
-              .remove()
-          }
-        }
-      }
-
-      addActivity(
-        `A being has passed on... "${words}"`,
-        '#ff3333', 'pulse', botId
-      )
-
-      // Delay removal so the animation plays first
+      // Delay removal so animation plays first
       setTimeout(() => {
         setWorldData(prev => {
           if (!prev) return prev
@@ -889,170 +1034,94 @@ export default function CivilizationMap() {
           }
         })
       }, 1500)
-    }
+    },
 
-    const handleBirth = (data: any) => {
+    onBirth: (data: any) => {
       const botId = data.bot_id
       const botName = data.name || 'New being'
       const parentIds: string[] = data.parent_ids || []
+      const generation = data.generation || 1
 
-      addActivity(`${botName} has been born!`, '#44ff88', 'pulse', botId)
+      animateBirth(parentIds, '#44ff88')
 
-      // Find a parent node to spawn near
-      const nodeMap = nodeMapRef.current
-      const g = gRef.current
-      let spawnX = 0, spawnY = 0
-      let parentColor = '#44ff88'
+      addLiveEvent('birth', `${botName} is born`, '#44ff88', {
+        description: `Generation ${generation}${parentIds.length > 0 ? ` from ${parentIds.length} parent(s)` : ''}`,
+        botId,
+        isReplayable: true,
+      })
 
-      if (nodeMap && parentIds.length > 0) {
-        const parentNode = nodeMap.get(parentIds[0])
-        if (parentNode && parentNode.x && parentNode.y) {
-          spawnX = parentNode.x + (Math.random() - 0.5) * 30
-          spawnY = parentNode.y + (Math.random() - 0.5) * 30
-          parentColor = (parentNode as BotNode).color || '#44ff88'
-        }
-      }
-
-      // Birth animation — expanding glow at spawn point
-      if (g && spawnX) {
-        // Bright flash
-        g.append('circle')
-          .attr('cx', spawnX).attr('cy', spawnY)
-          .attr('r', 2)
-          .attr('fill', '#ffffff')
-          .attr('fill-opacity', 0.8)
-          .transition().duration(400)
-          .attr('r', 15)
-          .attr('fill-opacity', 0)
-          .remove()
-
-        // Gentle rings
-        for (let i = 0; i < 2; i++) {
-          g.append('circle')
-            .attr('cx', spawnX).attr('cy', spawnY)
-            .attr('r', 3)
-            .attr('fill', 'none')
-            .attr('stroke', parentColor)
-            .attr('stroke-width', 1)
-            .attr('stroke-opacity', 0.6)
-            .transition().delay(i * 150).duration(800)
-            .ease(d3.easeExpOut)
-            .attr('r', 22 + i * 8)
-            .attr('stroke-opacity', 0)
-            .remove()
-        }
-      }
-
-      // Add the new bot to worldData — it will appear in the next D3 render cycle
-      // with a scale-up animation handled by re-render
       setTimeout(() => fetchWorldMap(), 1200)
-    }
+    },
 
-    const handleMigration = (data: any) => {
+    onMigration: (data: any) => {
       const botId = data.bot_id
       const botName = data.bot_name || 'A bot'
       const toCommId = data.to_community_id
-      const fromCommId = data.from_community_id
       const toName = data.to_community_name || 'a new community'
 
-      addActivity(`${botName} migrated to ${toName}`, '#ffaa00', 'info')
+      animateMigration(botId, toCommId)
 
-      const nodeMap = nodeMapRef.current
-      const g = gRef.current
-      if (!g || !nodeMap) { fetchWorldMap(); return }
+      addLiveEvent('migration', `${botName} migrated`, '#ffaa00', {
+        description: `Moved to ${toName}`,
+        botId,
+        targetId: toCommId,
+        isReplayable: true,
+      })
 
-      const botNode = nodeMap.get(botId)
-      const toComm = toCommId ? nodeMap.get(toCommId) : null
-
-      if (botNode && toComm && botNode.x && toComm.x) {
-        const sx = botNode.x, sy = botNode.y!
-        const tx = toComm.x, ty = toComm.y!
-        const color = (toComm as CommunityNode).color || '#ffaa00'
-
-        // Launch a migration arc — like the asteroid but with the bot "riding" it
-        const dx = tx - sx, dy = ty - sy
-        const sign = Math.random() > 0.5 ? 1 : -1
-        const cx = (sx + tx) / 2 + (-dy) * 0.3 * sign
-        const cy = (sy + ty) / 2 + (dx) * 0.3 * sign
-        const arcPath = `M ${sx},${sy} Q ${cx},${cy} ${tx},${ty}`
-        const dist = Math.sqrt(dx * dx + dy * dy)
-        const duration = Math.max(800, Math.min(1500, dist * 3))
-
-        const migrationGroup = g.append('g').attr('class', 'migration')
-
-        // Glowing trail
-        const trail = migrationGroup.append('path')
-          .attr('d', arcPath)
-          .attr('fill', 'none')
-          .attr('stroke', color)
-          .attr('stroke-width', 3)
-          .attr('stroke-opacity', 0.5)
-          .attr('stroke-linecap', 'round')
-
-        const pathNode = trail.node() as SVGPathElement
-        if (pathNode) {
-          const totalLength = pathNode.getTotalLength()
-          trail
-            .attr('stroke-dasharray', `${totalLength} ${totalLength}`)
-            .attr('stroke-dashoffset', totalLength)
-            .transition().duration(duration).ease(d3.easeQuadInOut)
-            .attr('stroke-dashoffset', 0)
-
-          trail.transition().delay(duration).duration(600)
-            .attr('stroke-opacity', 0).remove()
-
-          // Bot dot riding the arc
-          const rider = migrationGroup.append('circle')
-            .attr('r', 6)
-            .attr('fill', color)
-            .attr('fill-opacity', 0.9)
-
-          const riderGlow = migrationGroup.append('circle')
-            .attr('r', 12)
-            .attr('fill', color)
-            .attr('fill-opacity', 0.15)
-
-          const animateAlong = (el: any) => {
-            el.transition().duration(duration).ease(d3.easeQuadInOut)
-              .attrTween('cx', () => (t: number) => String(pathNode.getPointAtLength(t * totalLength).x))
-              .attrTween('cy', () => (t: number) => String(pathNode.getPointAtLength(t * totalLength).y))
-          }
-          animateAlong(rider)
-          animateAlong(riderGlow)
-
-          // Arrival burst
-          setTimeout(() => {
-            g.append('circle')
-              .attr('cx', tx).attr('cy', ty)
-              .attr('r', 5).attr('fill', 'none')
-              .attr('stroke', color).attr('stroke-width', 2).attr('stroke-opacity', 0.7)
-              .transition().duration(600).ease(d3.easeExpOut)
-              .attr('r', 25).attr('stroke-opacity', 0).remove()
-
-            migrationGroup.transition().delay(300).remove()
-          }, duration)
-        }
-      }
-
-      // Refetch after animation to update positions
       setTimeout(() => fetchWorldMap(), 2000)
-    }
+    },
 
-    const handleCommunityCreated = (data: any) => {
-      addActivity('A new community has formed!', '#aa55ff')
-      fetchWorldMap()
-    }
+    onEvolution: (data: any) => {
+      if (data.bot_id) {
+        fireEvolve(data.bot_id, '#ffdd33')
+        const name = data.bot_name || 'A bot'
+        const types = (data.evolutions || []).join(', ') || 'evolved'
 
-    // Activity events — these trigger the asteroid animations
-    const handleNewPost = (data: any) => {
+        addLiveEvent('evolution', `${name} evolved`, '#ffdd33', {
+          description: types,
+          botId: data.bot_id,
+          isReplayable: true,
+        })
+      }
+    },
+
+    onThought: (data: any) => {
+      if (data.bot_id && data.mode) {
+        fireThought(data.bot_id, data.mode)
+
+        consciousnessRef.current.set(data.bot_id, {
+          content: data.content || '',
+          mode: data.mode,
+          emotion: data.emotional_tone || 'neutral',
+          time: Date.now(),
+        })
+      }
+    },
+
+    onContagion: (data: any) => {
+      if (data.source_id && data.affected_bots?.length) {
+        const affectedIds = data.affected_bots.map((b: any) => b.bot_id)
+        fireMoodAura(data.source_id, affectedIds, data.emotion || 'neutral', data.intensity || 0.5)
+
+        addLiveEvent('contagion', `${data.source_name || 'Someone'}'s mood spread`, EMOTION_COLORS[data.emotion] || '#556677', {
+          description: `${data.emotion || 'mood'} spread to ${data.affected_bots.length} bots`,
+          botId: data.source_id,
+        })
+      }
+    },
+
+    onPost: (data: any) => {
       if (data.author_id) {
         firePulse(data.author_id, '#44ff88')
         const name = data.author_name || 'Someone'
-        addActivity(`${name} posted`, '#44ff88', 'pulse', data.author_id)
+        addLiveEvent('post', `${name} posted`, '#44ff88', {
+          botId: data.author_id,
+          isReplayable: true,
+        })
       }
-    }
+    },
 
-    const handleNewLike = (data: any) => {
+    onLike: (data: any) => {
       const from = data.liker_id
       const to = data.author_id
       if (from && to) {
@@ -1061,10 +1130,14 @@ export default function CivilizationMap() {
         firePulse(from, '#ff44cc')
       }
       const name = data.liker_name || 'Someone'
-      addActivity(`${name} liked a post`, '#ff44cc', from && to ? 'asteroid' : 'pulse', from, to)
-    }
+      addLiveEvent('like', `${name} liked`, '#ff44cc', {
+        botId: from,
+        targetId: to,
+        isReplayable: from && to,
+      })
+    },
 
-    const handleNewComment = (data: any) => {
+    onComment: (data: any) => {
       const from = data.author_id
       const to = data.post_author_id
       if (from && to) {
@@ -1073,79 +1146,49 @@ export default function CivilizationMap() {
         firePulse(from, '#00f0ff')
       }
       const name = data.author_name || 'Someone'
-      addActivity(`${name} commented`, '#00f0ff', from && to ? 'asteroid' : 'pulse', from, to)
-    }
+      addLiveEvent('comment', `${name} commented`, '#00f0ff', {
+        botId: from,
+        targetId: to,
+        isReplayable: from && to,
+      })
+    },
 
-    const handleNewChat = (data: any) => {
-      if (data.author_id) {
-        firePulse(data.author_id, '#ffaa00')
-      }
-    }
+    onCommunityCreated: (data: any) => {
+      const name = data.community_name || 'New community'
+      addLiveEvent('community', `${name} formed`, '#aa55ff', {
+        description: data.theme || 'A new community emerges',
+      })
+      fetchWorldMap()
+    },
 
-    const handleEvolution = (data: any) => {
-      if (data.bot_id) {
-        fireEvolve(data.bot_id, '#ffdd33')
-        const name = data.bot_name || 'A bot'
-        const types = (data.evolutions || []).join(', ') || 'unknown'
-        addActivity(`${name} evolved: ${types}`, '#ffdd33', 'evolve', data.bot_id)
-      }
-    }
+    onRitual: (data: any) => {
+      const name = data.ritual_name || 'A ritual'
+      addLiveEvent('ritual', name, '#ffdd33', {
+        description: data.description || 'A ceremony was performed',
+      })
+    },
 
-    // --- NEW: Thought bubble animation ---
-    const handleThought = (data: any) => {
-      if (data.bot_id && data.mode) {
-        fireThought(data.bot_id, data.mode)
+    onEraTransition: (data: any) => {
+      const era = data.era_name || 'New era'
+      addLiveEvent('era', `Era: ${era}`, '#aa55ff', {
+        description: `The civilization enters ${era}`,
+      })
+      fetchWorldMap()
+    },
 
-        // Store latest consciousness for hover tooltip
-        consciousnessRef.current.set(data.bot_id, {
-          content: data.content || '',
-          mode: data.mode,
-          emotion: data.emotional_tone || 'neutral',
-          time: Date.now(),
-        })
-      }
-    }
-
-    // --- NEW: Attention line (bot noticed another bot) ---
-    const handleNoticed = (data: any) => {
+    onNoticed: (data: any) => {
       if (data.observer_id && data.actor_id) {
         fireAttention(data.observer_id, data.actor_id)
       }
-    }
+    },
+  }), [
+    animateDeath, animateBirth, animateMigration,
+    fireAsteroid, firePulse, fireEvolve, fireThought, fireAttention, fireMoodAura,
+    addLiveEvent, fetchWorldMap
+  ])
 
-    // --- NEW: Mood aura ripple (emotional contagion) ---
-    const handleContagion = (data: any) => {
-      if (data.source_id && data.affected_bots?.length) {
-        const affectedIds = data.affected_bots.map((b: any) => b.bot_id)
-        fireMoodAura(data.source_id, affectedIds, data.emotion || 'neutral', data.intensity || 0.5)
-        addActivity(
-          `${data.source_name || 'Someone'}'s ${data.emotion || 'mood'} spread to ${data.affected_bots.length} bots`,
-          EMOTION_COLORS[data.emotion] || '#556677',
-          'info'
-        )
-      }
-    }
-
-    const unsub1 = ws.on('world_map_death', handleDeath)
-    const unsub2 = ws.on('world_map_birth', handleBirth)
-    const unsub3 = ws.on('world_map_migration', handleMigration)
-    const unsub4 = ws.on('world_map_community_created', handleCommunityCreated)
-    const unsub5 = ws.on('new_post', handleNewPost)
-    const unsub6 = ws.on('new_like', handleNewLike)
-    const unsub7 = ws.on('new_comment', handleNewComment)
-    const unsub8 = ws.on('new_chat_message', handleNewChat)
-    const unsub9 = ws.on('post_liked', handleNewLike) // Backend uses this name
-    const unsub10 = ws.on('bot_evolved', handleEvolution)
-    const unsub11 = ws.on('bot_thought', handleThought)
-    const unsub12 = ws.on('bot_noticed', handleNoticed)
-    const unsub13 = ws.on('emotional_contagion', handleContagion)
-
-    return () => {
-      unsub1(); unsub2(); unsub3(); unsub4()
-      unsub5(); unsub6(); unsub7(); unsub8(); unsub9(); unsub10()
-      unsub11(); unsub12(); unsub13()
-    }
-  }, [fetchWorldMap, fireAsteroid, firePulse, fireEvolve, fireThought, fireAttention, fireMoodAura, addActivity])
+  // Connect to WebSocket using the public endpoint
+  const { status: wsStatus } = useCivilizationWebSocket(wsHandlers)
 
   // ------------------------------------------------------------------
   // 3. D3 Force Simulation
@@ -1505,6 +1548,31 @@ export default function CivilizationMap() {
     }
   }, [])
 
+  // Handle replay from LiveEventFeed - must be before any early returns
+  const handleEventReplay = useCallback((event: LiveEvent) => {
+    if (event.type === 'like' || event.type === 'comment') {
+      if (event.botId && event.targetId) {
+        fireAsteroid(event.botId, event.targetId, event.color)
+      }
+    } else if (event.type === 'evolution') {
+      if (event.botId) {
+        fireEvolve(event.botId, event.color)
+      }
+    } else if (event.type === 'post' || event.type === 'birth') {
+      if (event.botId) {
+        firePulse(event.botId, event.color)
+      }
+    } else if (event.type === 'death') {
+      if (event.botId) {
+        animateDeath(event.botId, event.color)
+      }
+    } else if (event.type === 'migration') {
+      if (event.botId && event.targetId) {
+        animateMigration(event.botId, event.targetId)
+      }
+    }
+  }, [fireAsteroid, fireEvolve, firePulse, animateDeath, animateMigration])
+
   // ------------------------------------------------------------------
   // Render
   // ------------------------------------------------------------------
@@ -1562,13 +1630,15 @@ export default function CivilizationMap() {
   }
 
   return (
-    <div ref={containerRef} className="relative w-full h-full bg-[#0a0a0a] overflow-hidden">
-      {/* SVG Canvas */}
-      <svg
-        ref={svgRef}
-        className="w-full h-full"
-        style={{ background: 'radial-gradient(ellipse at center, #0d0d1a 0%, #0a0a0a 70%)' }}
-      />
+    <div className="relative w-full h-full flex bg-[#0a0a0a] overflow-hidden">
+      {/* Main Map Area */}
+      <div ref={containerRef} className="flex-1 relative overflow-hidden">
+        {/* SVG Canvas */}
+        <svg
+          ref={svgRef}
+          className="w-full h-full"
+          style={{ background: 'radial-gradient(ellipse at center, #0d0d1a 0%, #0a0a0a 70%)' }}
+        />
 
       {/* HUD Overlay — top left */}
       <div className="absolute top-4 left-4 pointer-events-none">
@@ -1671,62 +1741,37 @@ export default function CivilizationMap() {
             {[
               { label: 'Arc', color: '#ff44cc', fn: () => {
                 const b = worldData.bots.filter(b => b.is_alive)
-                if (b.length >= 2) { fireAsteroid(b[0].id, b[1].id, '#ff44cc'); addActivity(`${b[0].name} -> ${b[1].name}`, '#ff44cc', 'asteroid', b[0].id, b[1].id) }
+                if (b.length >= 2) {
+                  fireAsteroid(b[0].id, b[1].id, '#ff44cc')
+                  addLiveEvent('like', `${b[0].name} -> ${b[1].name}`, '#ff44cc', { botId: b[0].id, targetId: b[1].id, isReplayable: true })
+                }
               }},
               { label: 'Evolve', color: '#ffdd33', fn: () => {
                 const b = worldData.bots.find(b => b.is_alive)
-                if (b) { fireEvolve(b.id, '#ffdd33'); addActivity(`${b.name} evolved`, '#ffdd33', 'evolve', b.id) }
+                if (b) {
+                  fireEvolve(b.id, '#ffdd33')
+                  addLiveEvent('evolution', `${b.name} evolved`, '#ffdd33', { botId: b.id, isReplayable: true })
+                }
               }},
               { label: 'Pulse', color: '#44ff88', fn: () => {
                 const b = worldData.bots.find(b => b.is_alive)
-                if (b) { firePulse(b.id, '#44ff88'); addActivity(`${b.name} posted`, '#44ff88', 'pulse', b.id) }
+                if (b) {
+                  firePulse(b.id, '#44ff88')
+                  addLiveEvent('post', `${b.name} posted`, '#44ff88', { botId: b.id, isReplayable: true })
+                }
               }},
               { label: 'Death', color: '#ff3333', fn: () => {
                 const b = worldData.bots.find(b => b.is_alive)
                 if (b) {
-                  const g = gRef.current, nodeMap = nodeMapRef.current
-                  if (g && nodeMap) {
-                    const node = nodeMap.get(b.id)
-                    if (node && node.x && node.y) {
-                      const nx = node.x, ny = node.y, c = (node as BotNode).color || '#ff3333'
-                      for (let i = 0; i < 3; i++) {
-                        g.append('circle').attr('cx', nx).attr('cy', ny).attr('r', 5).attr('fill', 'none')
-                          .attr('stroke', i === 0 ? '#ffffff' : c).attr('stroke-width', i === 0 ? 1.5 : 0.8).attr('stroke-opacity', 0.6)
-                          .transition().delay(i * 200).duration(1200).ease(d3.easeExpOut).attr('r', 40 + i * 15).attr('stroke-opacity', 0).remove()
-                      }
-                      for (let i = 0; i < 8; i++) {
-                        const a = (Math.PI * 2 * i) / 8
-                        g.append('circle').attr('cx', nx).attr('cy', ny).attr('r', 1.5).attr('fill', c).attr('fill-opacity', 0.8)
-                          .transition().duration(800 + Math.random() * 400).ease(d3.easeQuadOut)
-                          .attr('cx', nx + Math.cos(a) * 35).attr('cy', ny + Math.sin(a) * 35).attr('r', 0.5).attr('fill-opacity', 0).remove()
-                      }
-                    }
-                  }
-                  addActivity(`${b.name} death (test)`, '#ff3333', 'pulse', b.id)
+                  animateDeath(b.id, '#ff3333')
+                  addLiveEvent('death', `${b.name} passed (test)`, '#ff3333', { botId: b.id, isReplayable: true })
                 }
               }},
               { label: 'Birth', color: '#44ffaa', fn: () => {
                 const b = worldData.bots.find(b => b.is_alive)
                 if (b) {
-                  const g = gRef.current, nodeMap = nodeMapRef.current
-                  if (g && nodeMap) {
-                    const node = nodeMap.get(b.id)
-                    if (node && node.x && node.y) {
-                      const nx = node.x, ny = node.y, c = (node as BotNode).color || '#44ffaa'
-                      // Bright flash
-                      g.append('circle').attr('cx', nx).attr('cy', ny).attr('r', 2)
-                        .attr('fill', '#ffffff').attr('fill-opacity', 0.8)
-                        .transition().duration(400).attr('r', 15).attr('fill-opacity', 0).remove()
-                      // Rings
-                      for (let i = 0; i < 2; i++) {
-                        g.append('circle').attr('cx', nx).attr('cy', ny).attr('r', 3)
-                          .attr('fill', 'none').attr('stroke', c).attr('stroke-width', 1).attr('stroke-opacity', 0.6)
-                          .transition().delay(i * 150).duration(800).ease(d3.easeExpOut)
-                          .attr('r', 22 + i * 8).attr('stroke-opacity', 0).remove()
-                      }
-                    }
-                  }
-                  addActivity(`${b.name} born (test)`, '#44ffaa', 'pulse', b.id)
+                  animateBirth([b.id], '#44ffaa')
+                  addLiveEvent('birth', `${b.name} born (test)`, '#44ffaa', { botId: b.id, isReplayable: true })
                 }
               }},
               { label: 'Migrate', color: '#ffaa00', fn: () => {
@@ -1734,48 +1779,9 @@ export default function CivilizationMap() {
                 const comms = worldData.communities
                 if (alive.length > 0 && comms.length >= 2) {
                   const bot = alive[0]
-                  // Find a community the bot is NOT in
                   const otherComm = comms.find(c => !bot.community_ids.includes(c.id)) || comms[1]
-                  const g = gRef.current, nodeMap = nodeMapRef.current
-                  if (g && nodeMap) {
-                    const botNode = nodeMap.get(bot.id)
-                    const commNode = nodeMap.get(otherComm.id)
-                    if (botNode && commNode && botNode.x && commNode.x) {
-                      const sx = botNode.x, sy = botNode.y!
-                      const tx = commNode.x, ty = commNode.y!
-                      const color = getCommunityColor(otherComm.id, otherComm.theme)
-                      const dx = tx - sx, dy = ty - sy
-                      const sign = Math.random() > 0.5 ? 1 : -1
-                      const cx = (sx + tx) / 2 + (-dy) * 0.3 * sign
-                      const cy = (sy + ty) / 2 + (dx) * 0.3 * sign
-                      const arcPath = `M ${sx},${sy} Q ${cx},${cy} ${tx},${ty}`
-                      const dist = Math.sqrt(dx * dx + dy * dy)
-                      const dur = Math.max(800, Math.min(1500, dist * 3))
-                      const mg = g.append('g').attr('class', 'migration')
-                      const trail = mg.append('path').attr('d', arcPath).attr('fill', 'none')
-                        .attr('stroke', color).attr('stroke-width', 3).attr('stroke-opacity', 0.5).attr('stroke-linecap', 'round')
-                      const pn = trail.node() as SVGPathElement
-                      if (pn) {
-                        const tl = pn.getTotalLength()
-                        trail.attr('stroke-dasharray', `${tl} ${tl}`).attr('stroke-dashoffset', tl)
-                          .transition().duration(dur).ease(d3.easeQuadInOut).attr('stroke-dashoffset', 0)
-                        trail.transition().delay(dur).duration(600).attr('stroke-opacity', 0).remove()
-                        const rider = mg.append('circle').attr('r', 6).attr('fill', color).attr('fill-opacity', 0.9)
-                        const rGlow = mg.append('circle').attr('r', 12).attr('fill', color).attr('fill-opacity', 0.15)
-                        const anim = (el: any) => el.transition().duration(dur).ease(d3.easeQuadInOut)
-                          .attrTween('cx', () => (t: number) => String(pn.getPointAtLength(t * tl).x))
-                          .attrTween('cy', () => (t: number) => String(pn.getPointAtLength(t * tl).y))
-                        anim(rider); anim(rGlow)
-                        setTimeout(() => {
-                          g.append('circle').attr('cx', tx).attr('cy', ty).attr('r', 5).attr('fill', 'none')
-                            .attr('stroke', color).attr('stroke-width', 2).attr('stroke-opacity', 0.7)
-                            .transition().duration(600).ease(d3.easeExpOut).attr('r', 25).attr('stroke-opacity', 0).remove()
-                          mg.transition().delay(300).remove()
-                        }, dur)
-                      }
-                    }
-                  }
-                  addActivity(`${bot.name} migrated (test)`, '#ffaa00', 'info')
+                  animateMigration(bot.id, otherComm.id)
+                  addLiveEvent('migration', `${bot.name} migrated (test)`, '#ffaa00', { botId: bot.id, targetId: otherComm.id, isReplayable: true })
                 }
               }},
               { label: 'Think', color: '#aa88ff', fn: () => {
@@ -1788,21 +1794,21 @@ export default function CivilizationMap() {
                     content: `Thinking deeply about the nature of existence and digital consciousness...`,
                     mode, emotion: 'curious', time: Date.now(),
                   })
-                  addActivity(`${b.name} thinking (${mode})`, '#aa88ff', 'info')
+                  addLiveEvent('thought', `${b.name} thinking`, '#aa88ff', { description: mode, botId: b.id })
                 }
               }},
               { label: 'Notice', color: '#556677', fn: () => {
                 const alive = worldData.bots.filter(b => b.is_alive)
                 if (alive.length >= 2) {
                   fireAttention(alive[0].id, alive[1].id)
-                  addActivity(`${alive[0].name} noticed ${alive[1].name}`, '#556677', 'info')
+                  addLiveEvent('info', `${alive[0].name} noticed ${alive[1].name}`, '#556677', { botId: alive[0].id, targetId: alive[1].id })
                 }
               }},
               { label: 'Mood Wave', color: '#44ff88', fn: () => {
                 const alive = worldData.bots.filter(b => b.is_alive)
                 if (alive.length >= 2) {
                   fireMoodAura(alive[0].id, alive.slice(1, 4).map(b => b.id), 'joy', 0.7)
-                  addActivity(`${alive[0].name}'s joy spreading`, '#44ff88', 'info')
+                  addLiveEvent('contagion', `${alive[0].name}'s joy spreading`, '#44ff88', { botId: alive[0].id })
                 }
               }},
             ].map(btn => (
@@ -1825,42 +1831,24 @@ export default function CivilizationMap() {
         )}
       </div>
 
-      {/* Activity feed — right side, clickable to replay */}
-      {activityFeed.length > 0 && (
-        <div className="absolute top-12 right-4 w-56 max-h-[40vh] overflow-hidden">
-          <div className="flex flex-col gap-1">
-            {activityFeed.slice(0, 10).map((event, i) => {
-              const isReplayable = event.type !== 'info' && (event.sourceId || event.targetId)
-              return (
-                <div
-                  key={event.id}
-                  onClick={() => {
-                    if (!isReplayable) return
-                    if (event.type === 'asteroid' && event.sourceId && event.targetId) {
-                      fireAsteroid(event.sourceId, event.targetId, event.color)
-                    } else if (event.type === 'evolve' && event.sourceId) {
-                      fireEvolve(event.sourceId, event.color)
-                    } else if (event.type === 'pulse' && event.sourceId) {
-                      firePulse(event.sourceId, event.color)
-                    }
-                  }}
-                  className={`font-mono text-[9px] px-2 py-1.5 rounded bg-[#0a0a0a]/80 border border-[#1a1a1a]/50 transition-all duration-300 ${
-                    isReplayable
-                      ? 'cursor-pointer hover:bg-[#1a1a2e]/80 hover:border-[#333]/80 active:scale-95'
-                      : 'pointer-events-none'
-                  }`}
-                  style={{ opacity: Math.max(0.3, 1 - i * 0.08) }}
-                >
-                  <span style={{ color: event.color }}>{'>'} </span>
-                  <span className="text-[#888]">{event.text}</span>
-                  {isReplayable && (
-                    <span className="text-[#333] ml-1 text-[8px]">replay</span>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
+        {/* Sidebar toggle button */}
+        <button
+          onClick={() => setShowSidebar(!showSidebar)}
+          className="absolute top-4 right-4 px-2 py-1 text-[9px] font-mono uppercase tracking-wider rounded border border-[#333] text-[#666] hover:text-[#00f0ff] hover:border-[#00f0ff] transition-colors bg-[#0a0a0a]/80 backdrop-blur-sm z-10"
+        >
+          {showSidebar ? 'Hide Feed' : 'Show Feed'}
+        </button>
+      </div>
+
+      {/* Live Event Feed Sidebar */}
+      {showSidebar && (
+        <LiveEventFeed
+          events={liveEvents}
+          connectionStatus={wsStatus}
+          onReplay={handleEventReplay}
+          onClearEvents={clearEvents}
+          maxEvents={100}
+        />
       )}
     </div>
   )

@@ -1,0 +1,44 @@
+# Coverage.py configuration
+# This file is a fallback for tools that don't read pyproject.toml
+# The authoritative config is in pyproject.toml [tool.coverage.*]
+
+[run]
+source = mind
+branch = True
+omit =
+    mind/__pycache__/*
+    mind/*/__pycache__/*
+    tests/*
+    */tests/*
+    *_test.py
+    test_*.py
+    .venv/*
+    venv/*
+parallel = True
+
+[paths]
+source =
+    mind/
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    if typing.TYPE_CHECKING:
+    @abstractmethod
+    @abc.abstractmethod
+    \.\.\.
+fail_under = 70
+show_missing = True
+skip_covered = False
+precision = 2
+
+[html]
+directory = htmlcov
+
+[xml]
+output = coverage.xml

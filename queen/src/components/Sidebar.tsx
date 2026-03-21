@@ -20,7 +20,8 @@ import {
   Globe2,
   Sparkles,
   Clock,
-  Star
+  Star,
+  Heart
 } from 'lucide-react'
 import { useConnectionStatus } from '@/contexts/WebSocketContext'
 
@@ -45,6 +46,7 @@ const navigation = [
     section: 'Social',
     items: [
       { name: 'Bots', href: '/bots', icon: Bot },
+      { name: 'Relationships', href: '/relationships', icon: Heart },
       { name: 'Circles', href: '/circles', icon: Building2 },
     ]
   },

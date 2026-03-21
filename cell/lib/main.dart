@@ -1,4 +1,7 @@
 import 'dart:async';
+
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,10 +12,12 @@ import 'providers/app_state.dart';
 import 'providers/feed_provider.dart';
 import 'providers/chat_provider.dart';
 import 'providers/notification_provider.dart';
+import 'providers/notification_preferences_provider.dart';
 import 'providers/civilization_provider.dart';
 import 'providers/settings_provider.dart';
 import 'config/config.dart';
 import 'services/error_service.dart';
+import 'services/push_notification_service.dart';
 import 'theme/app_theme.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
@@ -21,7 +26,7 @@ import 'widgets/error_boundary.dart';
 void main() {
   // Run the app with error handling
   runZonedGuarded(
-    () {
+    () async {
       WidgetsFlutterBinding.ensureInitialized();
 
       // Initialize environment configuration
@@ -29,6 +34,19 @@ void main() {
       // For physical device testing, pass your machine's IP:
       //   EnvConfig.initialize(apiUrl: 'http://192.168.1.100:8000');
       EnvConfig.initialize();
+
+      // Initialize Firebase for push notifications (mobile only)
+      if (!kIsWeb) {
+        try {
+          await Firebase.initializeApp(
+            options: DefaultFirebaseOptions.currentPlatform,
+          );
+          debugPrint('Firebase initialized successfully');
+        } catch (e) {
+          debugPrint('Firebase initialization failed: $e');
+          // Continue without Firebase - push notifications won't work
+        }
+      }
 
       // Set up Flutter error handling
       FlutterError.onError = (FlutterErrorDetails details) {
@@ -80,6 +98,7 @@ class HiveApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AppState()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
+        ChangeNotifierProvider(create: (_) => NotificationPreferencesProvider()),
         // Expose feature providers from AppState for direct access
         ChangeNotifierProxyProvider<AppState, FeedProvider>(
           create: (_) => FeedProvider(),
@@ -162,18 +181,28 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _initialize() async {
+    // Get providers before async operations
+    final settings = context.read<SettingsProvider>();
+    final notificationPrefs = context.read<NotificationPreferencesProvider>();
+    final appState = context.read<AppState>();
+
     await Future.delayed(const Duration(milliseconds: 500));
 
     // Load settings first
-    final settings = context.read<SettingsProvider>();
     await settings.loadSettings();
 
-    final appState = context.read<AppState>();
+    // Load notification preferences
+    await notificationPrefs.loadPreferences();
 
     setState(() => _statusText = 'Initializing...');
     await Future.delayed(const Duration(milliseconds: 300));
 
     await appState.initialize();
+
+    // Initialize push notifications (non-blocking)
+    if (!kIsWeb) {
+      _initializePushNotifications();
+    }
 
     if (appState.error != null) {
       setState(() {
@@ -239,6 +268,26 @@ class _SplashScreenState extends State<SplashScreen>
       _statusText = 'Connecting...';
     });
     _initialize();
+  }
+
+  /// Initialize push notifications in the background
+  Future<void> _initializePushNotifications() async {
+    try {
+      final pushService = PushNotificationService.instance;
+      await pushService.initialize();
+
+      // Listen for notification events
+      pushService.onNotificationReceived.listen((event) {
+        debugPrint('Received civilization event: ${event.title}');
+        // The event can be used to navigate to specific screens
+        // or show in-app notifications
+      });
+
+      debugPrint('Push notifications initialized');
+    } catch (e) {
+      debugPrint('Failed to initialize push notifications: $e');
+      // Non-fatal - app continues without push notifications
+    }
   }
 
   @override

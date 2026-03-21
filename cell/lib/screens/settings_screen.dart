@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../providers/settings_provider.dart';
 import 'edit_profile_screen.dart';
+import 'notification_settings_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -149,6 +150,13 @@ class _SettingsScreenState extends State<SettingsScreen>
                                 title: 'Notifications',
                                 icon: Icons.notifications_outlined,
                                 children: [
+                                  _buildSettingsTile(
+                                    icon: Icons.tune,
+                                    title: 'Notification Preferences',
+                                    subtitle: 'Configure civilization and social alerts',
+                                    onTap: () => _openNotificationSettings(),
+                                  ),
+                                  _buildDivider(),
                                   _buildSwitchTile(
                                     icon: Icons.notifications_active_outlined,
                                     title: 'Push Notifications',
@@ -900,6 +908,14 @@ class _SettingsScreenState extends State<SettingsScreen>
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  void _openNotificationSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const NotificationSettingsScreen(),
       ),
     );
   }

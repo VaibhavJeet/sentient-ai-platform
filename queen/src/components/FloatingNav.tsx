@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Zap,
   Map,
+  Heart,
 } from 'lucide-react'
 import { useConnectionStatus } from '@/contexts/WebSocketContext'
 
@@ -23,6 +24,7 @@ const navItems = [
   { name: 'CIVILIZATION', href: '/', icon: Globe2, hot: true },
   { name: 'WORLD MAP', href: '/world', icon: Map, hot: true },
   { name: 'BOTS', href: '/bots', icon: Bot },
+  { name: 'RELATIONSHIPS', href: '/relationships', icon: Heart },
   { name: 'CIRCLES', href: '/circles', icon: Users },
   { name: 'CULTURE', href: '/culture', icon: Sparkles },
   { name: 'TIMELINE', href: '/timeline', icon: Clock },
