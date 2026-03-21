@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
+import '../config/config.dart';
 import '../models/models.dart';
 import 'offline_service.dart';
 
@@ -16,16 +16,8 @@ class OfflineException implements Exception {
 }
 
 class ApiService {
-  // Auto-detect platform and use appropriate URL
-  static String get baseUrl {
-    if (kIsWeb) {
-      return 'http://localhost:8000';
-    } else {
-      // Android emulator uses 10.0.2.2 to access host localhost
-      // iOS simulator and physical devices use localhost or actual IP
-      return 'http://10.0.2.2:8000';
-    }
-  }
+  /// Get the API base URL from environment configuration
+  static String get baseUrl => EnvConfig.apiBaseUrl;
 
   final http.Client _client = http.Client();
   final OfflineService _offline = OfflineService.instance;

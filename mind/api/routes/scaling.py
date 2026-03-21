@@ -16,7 +16,7 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from mind.core.database import async_session_factory, AppUserDB, BotProfileDB
+from mind.core.database import async_session_factory, AppUserDB, BotProfileDB, RetiredBotDB, ArchivedMemoryDB
 from mind.core.auth import AuthenticatedUser
 from mind.api.dependencies import get_current_user
 
@@ -128,6 +128,35 @@ class MemoryStatsResponse(BaseModel):
     memory_types: dict
     avg_importance: float
     consolidation_candidates: int
+
+
+class RetiredBotRecordResponse(BaseModel):
+    """Response for retired bot record from RetiredBotDB."""
+    id: UUID
+    bot_id: UUID
+    reason: str
+    retired_at: datetime
+    retired_by: Optional[UUID] = None
+    total_posts: int
+    total_memories: int
+    active_days: int
+    archived_data_id: Optional[UUID] = None
+    notes: Optional[str] = None
+    display_name: Optional[str] = None
+    handle: Optional[str] = None
+
+
+class ArchivedMemoryResponse(BaseModel):
+    """Response for archived memory record."""
+    id: UUID
+    bot_id: UUID
+    archive_type: str
+    memory_count: int
+    summary: Optional[str] = None
+    size_bytes: int
+    compression_ratio: float
+    created_at: datetime
+    original_memories: Optional[List[dict]] = None
 
 
 # ============================================================================
@@ -506,3 +535,229 @@ async def consolidate_all_memories(
         "total_storage_saved_bytes": total_saved,
         "results": results[:100]  # Limit response size
     }
+
+
+# ============================================================================
+# RETIRED BOTS DATABASE ENDPOINTS
+# ============================================================================
+
+@router.get(
+    "/retired-bots/records",
+    response_model=List[RetiredBotRecordResponse],
+    summary="Get retired bot records",
+    description="Get retired bot records from RetiredBotDB with full details"
+)
+async def get_retired_bot_records(
+    limit: int = 100,
+    offset: int = 0,
+    reason: Optional[str] = None,
+    admin: AuthenticatedUser = Depends(require_admin)
+):
+    """Get retired bot records directly from RetiredBotDB."""
+    from sqlalchemy import func
+
+    async with async_session_factory() as session:
+        # Build query with optional filtering
+        conditions = []
+        if reason:
+            conditions.append(RetiredBotDB.reason == reason)
+
+        stmt = (
+            select(RetiredBotDB, BotProfileDB.display_name, BotProfileDB.handle)
+            .join(BotProfileDB, RetiredBotDB.bot_id == BotProfileDB.id, isouter=True)
+            .where(*conditions if conditions else [True])
+            .order_by(RetiredBotDB.retired_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+
+        result = await session.execute(stmt)
+        rows = result.all()
+
+        return [
+            RetiredBotRecordResponse(
+                id=record.id,
+                bot_id=record.bot_id,
+                reason=record.reason,
+                retired_at=record.retired_at,
+                retired_by=record.retired_by,
+                total_posts=record.total_posts,
+                total_memories=record.total_memories,
+                active_days=record.active_days,
+                archived_data_id=record.archived_data_id,
+                notes=record.notes,
+                display_name=display_name,
+                handle=handle
+            )
+            for record, display_name, handle in rows
+        ]
+
+
+@router.get(
+    "/retired-bots/records/{bot_id}",
+    response_model=RetiredBotRecordResponse,
+    summary="Get retired bot record by bot ID",
+    description="Get a specific retired bot record by bot ID"
+)
+async def get_retired_bot_record(
+    bot_id: UUID,
+    admin: AuthenticatedUser = Depends(require_admin)
+):
+    """Get a specific retired bot record."""
+    async with async_session_factory() as session:
+        stmt = (
+            select(RetiredBotDB, BotProfileDB.display_name, BotProfileDB.handle)
+            .join(BotProfileDB, RetiredBotDB.bot_id == BotProfileDB.id, isouter=True)
+            .where(RetiredBotDB.bot_id == bot_id)
+        )
+
+        result = await session.execute(stmt)
+        row = result.one_or_none()
+
+        if not row:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No retired bot record found for bot {bot_id}"
+            )
+
+        record, display_name, handle = row
+        return RetiredBotRecordResponse(
+            id=record.id,
+            bot_id=record.bot_id,
+            reason=record.reason,
+            retired_at=record.retired_at,
+            retired_by=record.retired_by,
+            total_posts=record.total_posts,
+            total_memories=record.total_memories,
+            active_days=record.active_days,
+            archived_data_id=record.archived_data_id,
+            notes=record.notes,
+            display_name=display_name,
+            handle=handle
+        )
+
+
+# ============================================================================
+# ARCHIVED MEMORIES DATABASE ENDPOINTS
+# ============================================================================
+
+@router.get(
+    "/archived-memories",
+    response_model=List[ArchivedMemoryResponse],
+    summary="Get archived memory records",
+    description="Get archived memory records from ArchivedMemoryDB"
+)
+async def get_archived_memories(
+    limit: int = 100,
+    offset: int = 0,
+    archive_type: Optional[str] = None,
+    bot_id: Optional[UUID] = None,
+    include_memories: bool = False,
+    admin: AuthenticatedUser = Depends(require_admin)
+):
+    """Get archived memory records."""
+    async with async_session_factory() as session:
+        conditions = []
+        if archive_type:
+            conditions.append(ArchivedMemoryDB.archive_type == archive_type)
+        if bot_id:
+            conditions.append(ArchivedMemoryDB.bot_id == bot_id)
+
+        stmt = (
+            select(ArchivedMemoryDB)
+            .where(*conditions if conditions else [True])
+            .order_by(ArchivedMemoryDB.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+
+        result = await session.execute(stmt)
+        records = result.scalars().all()
+
+        return [
+            ArchivedMemoryResponse(
+                id=record.id,
+                bot_id=record.bot_id,
+                archive_type=record.archive_type,
+                memory_count=record.memory_count,
+                summary=record.summary,
+                size_bytes=record.size_bytes,
+                compression_ratio=record.compression_ratio,
+                created_at=record.created_at,
+                original_memories=record.original_memories if include_memories else None
+            )
+            for record in records
+        ]
+
+
+@router.get(
+    "/archived-memories/{archive_id}",
+    response_model=ArchivedMemoryResponse,
+    summary="Get archived memory record by ID",
+    description="Get a specific archived memory record with full details"
+)
+async def get_archived_memory(
+    archive_id: UUID,
+    admin: AuthenticatedUser = Depends(require_admin)
+):
+    """Get a specific archived memory record."""
+    async with async_session_factory() as session:
+        stmt = select(ArchivedMemoryDB).where(ArchivedMemoryDB.id == archive_id)
+        result = await session.execute(stmt)
+        record = result.scalar_one_or_none()
+
+        if not record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No archived memory record found with ID {archive_id}"
+            )
+
+        return ArchivedMemoryResponse(
+            id=record.id,
+            bot_id=record.bot_id,
+            archive_type=record.archive_type,
+            memory_count=record.memory_count,
+            summary=record.summary,
+            size_bytes=record.size_bytes,
+            compression_ratio=record.compression_ratio,
+            created_at=record.created_at,
+            original_memories=record.original_memories
+        )
+
+
+@router.get(
+    "/archived-memories/bot/{bot_id}",
+    response_model=List[ArchivedMemoryResponse],
+    summary="Get archived memories for a bot",
+    description="Get all archived memory records for a specific bot"
+)
+async def get_bot_archived_memories(
+    bot_id: UUID,
+    include_memories: bool = False,
+    admin: AuthenticatedUser = Depends(require_admin)
+):
+    """Get all archived memory records for a specific bot."""
+    async with async_session_factory() as session:
+        stmt = (
+            select(ArchivedMemoryDB)
+            .where(ArchivedMemoryDB.bot_id == bot_id)
+            .order_by(ArchivedMemoryDB.created_at.desc())
+        )
+
+        result = await session.execute(stmt)
+        records = result.scalars().all()
+
+        return [
+            ArchivedMemoryResponse(
+                id=record.id,
+                bot_id=record.bot_id,
+                archive_type=record.archive_type,
+                memory_count=record.memory_count,
+                summary=record.summary,
+                size_bytes=record.size_bytes,
+                compression_ratio=record.compression_ratio,
+                created_at=record.created_at,
+                original_memories=record.original_memories if include_memories else None
+            )
+            for record in records
+        ]

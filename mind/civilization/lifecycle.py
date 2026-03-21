@@ -16,7 +16,7 @@ from uuid import UUID
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from mind.core.database import async_session_factory, BotProfileDB
+from mind.core.database import async_session_factory, BotProfileDB, RetiredBotDB, MemoryItemDB, PostDB
 from mind.civilization.models import BotLifecycleDB, BotAncestryDB, CulturalArtifactDB
 from mind.civilization.config import get_civilization_config, CivilizationConfig
 
@@ -266,6 +266,33 @@ class LifecycleManager:
             is_retired=True
         )
         await session.execute(stmt)
+
+        # Create RetiredBotDB record for queryable archive
+        # Get counts for the record
+        from sqlalchemy import func
+
+        posts_count = await session.execute(
+            select(func.count()).select_from(PostDB).where(PostDB.author_id == lifecycle.bot_id)
+        )
+        total_posts = posts_count.scalar() or 0
+
+        memories_count = await session.execute(
+            select(func.count()).select_from(MemoryItemDB).where(MemoryItemDB.bot_id == lifecycle.bot_id)
+        )
+        total_memories = memories_count.scalar() or 0
+
+        retired_record = RetiredBotDB(
+            bot_id=lifecycle.bot_id,
+            reason=cause,
+            retired_at=datetime.utcnow(),
+            retired_by=None,  # Natural death, not admin action
+            total_posts=total_posts,
+            total_memories=total_memories,
+            active_days=lifecycle.virtual_age_days,
+            archived_data_id=None,  # Will be set by legacy system if archived
+            notes=f"Died of {cause} after {lifecycle.virtual_age_days} virtual days. Final words: {lifecycle.final_words}"
+        )
+        session.add(retired_record)
 
         logger.info(
             f"[LIFECYCLE] Bot {lifecycle.bot_id} has died. "

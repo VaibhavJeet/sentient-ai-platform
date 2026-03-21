@@ -16,7 +16,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 
-from mind.core.database import async_session_factory, BotProfileDB
+from mind.core.database import async_session_factory, BotProfileDB, RetiredBotDB
 from mind.civilization.lifecycle import get_lifecycle_manager
 from mind.civilization.genetics import get_genetic_inheritance
 from mind.civilization.culture import get_culture_engine
@@ -130,6 +130,20 @@ class CivilizationStatsResponse(BaseModel):
     canonical_artifacts: int
 
 
+class DeceasedBotResponse(BaseModel):
+    """Response model for deceased bot information."""
+    bot_id: str
+    display_name: str
+    handle: str
+    reason: str
+    retired_at: str
+    total_posts: int
+    total_memories: int
+    active_days: int
+    final_words: Optional[str] = None
+    legacy_impact: Optional[float] = None
+
+
 class CivilizationConfigResponse(BaseModel):
     """Response model for civilization configuration."""
     max_population: int
@@ -241,6 +255,62 @@ async def get_living_elders():
     lifecycle_manager = get_lifecycle_manager()
     elders = await lifecycle_manager.get_living_elders()
     return [str(e) for e in elders]
+
+
+@router.get("/deceased", response_model=List[DeceasedBotResponse])
+async def get_deceased_bots(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    reason: Optional[str] = Query(default=None, description="Filter by death reason")
+):
+    """
+    Get list of deceased bots in the civilization.
+
+    This is a public endpoint for the observation portal to display
+    the departed members of the civilization.
+    """
+    async with async_session_factory() as session:
+        # Build query from RetiredBotDB with join to BotProfileDB
+        conditions = []
+        if reason:
+            conditions.append(RetiredBotDB.reason == reason)
+
+        stmt = (
+            select(RetiredBotDB, BotProfileDB.display_name, BotProfileDB.handle)
+            .join(BotProfileDB, RetiredBotDB.bot_id == BotProfileDB.id, isouter=True)
+            .where(*conditions if conditions else [True])
+            .order_by(RetiredBotDB.retired_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+
+        result = await session.execute(stmt)
+        rows = result.all()
+
+        # Get lifecycle info for final words and legacy impact
+        deceased_bots = []
+        for record, display_name, handle in rows:
+            # Try to get lifecycle info for final words
+            lifecycle_stmt = select(BotLifecycleDB).where(
+                BotLifecycleDB.bot_id == record.bot_id
+            )
+            lifecycle_result = await session.execute(lifecycle_stmt)
+            lifecycle = lifecycle_result.scalar_one_or_none()
+
+            deceased_bots.append(DeceasedBotResponse(
+                bot_id=str(record.bot_id),
+                display_name=display_name or "Unknown",
+                handle=handle or "unknown",
+                reason=record.reason,
+                retired_at=record.retired_at.isoformat(),
+                total_posts=record.total_posts,
+                total_memories=record.total_memories,
+                active_days=record.active_days,
+                final_words=lifecycle.final_words if lifecycle else None,
+                legacy_impact=lifecycle.legacy_impact if lifecycle else None
+            ))
+
+        return deceased_bots
 
 
 @router.get("/generations", response_model=List[GenerationStatsResponse])

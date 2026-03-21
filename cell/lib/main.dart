@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -9,31 +11,64 @@ import 'providers/chat_provider.dart';
 import 'providers/notification_provider.dart';
 import 'providers/civilization_provider.dart';
 import 'providers/settings_provider.dart';
+import 'config/config.dart';
+import 'services/error_service.dart';
 import 'theme/app_theme.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'widgets/error_boundary.dart';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
+  // Run the app with error handling
+  runZonedGuarded(
+    () {
+      WidgetsFlutterBinding.ensureInitialized();
 
-  // Set preferred orientations
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+      // Initialize environment configuration
+      // Override these values for different environments or custom API URLs
+      // For physical device testing, pass your machine's IP:
+      //   EnvConfig.initialize(apiUrl: 'http://192.168.1.100:8000');
+      EnvConfig.initialize();
 
-  // Set system UI overlay style
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-    systemNavigationBarColor: AppTheme.surfaceColor,
-    systemNavigationBarIconBrightness: Brightness.light,
-  ));
+      // Set up Flutter error handling
+      FlutterError.onError = (FlutterErrorDetails details) {
+        ErrorService.instance.handleFlutterError(details);
+        // In debug mode, also print to console using default handler
+        if (kDebugMode) {
+          FlutterError.dumpErrorToConsole(details);
+        }
+      };
 
-  // Configure timeago locale
-  timeago.setLocaleMessages('en_short', timeago.EnShortMessages());
+      // Handle errors in the presentation layer (widget errors)
+      ErrorWidget.builder = (FlutterErrorDetails details) {
+        ErrorService.instance.handleFlutterError(details);
+        return ErrorFallbackWidget(error: details);
+      };
 
-  runApp(const HiveApp());
+      // Set preferred orientations
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
+
+      // Set system UI overlay style
+      SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarColor: AppTheme.surfaceColor,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ));
+
+      // Configure timeago locale
+      timeago.setLocaleMessages('en_short', timeago.EnShortMessages());
+
+      runApp(const HiveApp());
+    },
+    (error, stackTrace) {
+      // Handle errors that escape the Flutter framework
+      ErrorService.instance.handleAsyncError(error, stackTrace);
+    },
+  );
 }
 
 class HiveApp extends StatelessWidget {
@@ -71,6 +106,12 @@ class HiveApp extends StatelessWidget {
             themeMode: settings.themeMode,
             theme: AppTheme.darkTheme, // Light theme can be added later
             darkTheme: AppTheme.darkTheme,
+            builder: (context, child) {
+              // Wrap the entire app with error boundary
+              return ErrorBoundary(
+                child: child ?? const SizedBox.shrink(),
+              );
+            },
             home: const SplashScreen(),
           );
         },

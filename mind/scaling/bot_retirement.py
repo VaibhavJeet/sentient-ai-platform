@@ -23,6 +23,8 @@ from mind.core.database import (
     CommunityMembershipDB,
     PostDB,
     PostCommentDB,
+    RetiredBotDB,
+    ArchivedMemoryDB,
 )
 
 
@@ -316,6 +318,20 @@ class BotRetirementManager:
             }
             bot.emotional_state = retirement_metadata
 
+            # Create RetiredBotDB record for queryable archive
+            retired_record = RetiredBotDB(
+                bot_id=bot_id,
+                reason=reason.value,
+                retired_at=datetime.utcnow(),
+                retired_by=retired_by,
+                total_posts=total_posts,
+                total_memories=total_memories,
+                active_days=active_days,
+                archived_data_id=archived_id,
+                notes=notes
+            )
+            sess.add(retired_record)
+
             await sess.commit()
 
             logger.info(f"Bot {bot.display_name} ({bot_id}) retired: {reason.value}")
@@ -412,7 +428,7 @@ class BotRetirementManager:
         session: Optional[AsyncSession] = None
     ) -> List[RetiredBot]:
         """
-        Get list of retired bots.
+        Get list of retired bots from RetiredBotDB.
 
         Args:
             limit: Maximum number of results
@@ -424,55 +440,35 @@ class BotRetirementManager:
             List of RetiredBot objects
         """
         async def _get(sess: AsyncSession) -> List[RetiredBot]:
-            conditions = [BotProfileDB.is_retired == True]
+            # Build query from RetiredBotDB with join to BotProfileDB for names
+            conditions = []
+            if reason:
+                conditions.append(RetiredBotDB.reason == reason.value)
 
             stmt = (
-                select(BotProfileDB)
-                .where(and_(*conditions))
-                .order_by(BotProfileDB.deleted_at.desc())
+                select(RetiredBotDB, BotProfileDB.display_name, BotProfileDB.handle)
+                .join(BotProfileDB, RetiredBotDB.bot_id == BotProfileDB.id)
+                .where(and_(*conditions) if conditions else True)
+                .order_by(RetiredBotDB.retired_at.desc())
                 .limit(limit)
                 .offset(offset)
             )
 
             result = await sess.execute(stmt)
-            bots = result.scalars().all()
+            rows = result.all()
 
             retired_bots = []
-            for bot in bots:
-                # Extract retirement metadata
-                retirement_meta = bot.emotional_state.get("retirement", {})
-                retirement_reason = retirement_meta.get("reason", "administrative")
-
-                # Filter by reason if specified
-                if reason and retirement_reason != reason.value:
-                    continue
-
-                # Get counts
-                posts_count = await sess.execute(
-                    select(func.count()).select_from(PostDB).where(PostDB.author_id == bot.id)
-                )
-                total_posts = posts_count.scalar() or 0
-
-                memories_count = await sess.execute(
-                    select(func.count()).select_from(MemoryItemDB).where(MemoryItemDB.bot_id == bot.id)
-                )
-                total_memories = memories_count.scalar() or 0
-
-                retired_at = bot.deleted_at or datetime.utcnow()
-                active_days = (retired_at - bot.created_at).days
-
-                archived_id = retirement_meta.get("archived_data_id")
-
+            for retired_record, display_name, handle in rows:
                 retired_bots.append(RetiredBot(
-                    id=bot.id,
-                    display_name=bot.display_name,
-                    handle=bot.handle,
-                    reason=RetirementReason(retirement_reason),
-                    retired_at=retired_at,
-                    total_posts=total_posts,
-                    total_memories=total_memories,
-                    active_days=active_days,
-                    archived_data_id=UUID(archived_id) if archived_id else None
+                    id=retired_record.bot_id,
+                    display_name=display_name,
+                    handle=handle,
+                    reason=RetirementReason(retired_record.reason),
+                    retired_at=retired_record.retired_at,
+                    total_posts=retired_record.total_posts,
+                    total_memories=retired_record.total_memories,
+                    active_days=retired_record.active_days,
+                    archived_data_id=retired_record.archived_data_id
                 ))
 
             return retired_bots

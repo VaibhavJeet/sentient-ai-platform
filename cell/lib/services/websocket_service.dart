@@ -1,21 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:web_socket_channel/web_socket_channel.dart';
+import '../config/config.dart';
 import '../models/models.dart';
 import 'offline_service.dart';
 
 typedef EventCallback = void Function(Map<String, dynamic> data);
 
 class WebSocketService {
-  // Auto-detect platform and use appropriate URL
-  static String get wsUrl {
-    if (kIsWeb) {
-      return 'ws://localhost:8000/ws';
-    } else {
-      return 'ws://10.0.2.2:8000/ws';
-    }
-  }
+  /// Get the WebSocket URL from environment configuration
+  static String get wsUrl => EnvConfig.wsBaseUrl;
 
   WebSocketChannel? _channel;
   final String clientId;

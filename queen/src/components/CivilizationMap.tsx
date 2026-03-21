@@ -1481,6 +1481,31 @@ export default function CivilizationMap() {
   }, [worldData])
 
   // ------------------------------------------------------------------
+  // 4. Handle container resize (sidebar toggle, window resize)
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    if (!containerRef.current || !svgRef.current) return
+
+    const container = containerRef.current
+    const svg = d3.select(svgRef.current)
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect
+        if (width > 0 && height > 0) {
+          svg.attr('width', width).attr('height', height)
+        }
+      }
+    })
+
+    resizeObserver.observe(container)
+
+    return () => {
+      resizeObserver.disconnect()
+    }
+  }, [])
+
+  // ------------------------------------------------------------------
   // Render
   // ------------------------------------------------------------------
   if (loading) {
@@ -1499,14 +1524,38 @@ export default function CivilizationMap() {
   if (error) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-[#0a0a0a]">
-        <div className="text-center">
-          <p className="text-[#ff4444] font-mono text-sm">{error}</p>
-          <button
-            onClick={fetchWorldMap}
-            className="mt-4 px-4 py-2 text-xs font-mono uppercase tracking-wider border border-[#333] text-[#888] hover:text-[#00f0ff] hover:border-[#00f0ff] transition-colors"
-          >
-            Retry
-          </button>
+        <div className="text-center max-w-md px-6">
+          <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-[#ff4444]/10 border border-[#ff4444]/30 flex items-center justify-center">
+            <svg className="w-6 h-6 text-[#ff4444]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h3 className="text-foreground font-mono text-sm font-semibold mb-2">
+            Failed to Load Civilization Map
+          </h3>
+          <p className="text-[#888888] font-mono text-xs mb-1">
+            Unable to connect to the civilization server.
+          </p>
+          <p className="text-[#ff4444]/80 font-mono text-[10px] mb-4 break-all">
+            {error}
+          </p>
+          <div className="flex items-center justify-center gap-3">
+            <button
+              onClick={fetchWorldMap}
+              className="px-4 py-2 text-xs font-mono uppercase tracking-wider border border-[#333] text-[#888] hover:text-[#00f0ff] hover:border-[#00f0ff] transition-colors rounded"
+            >
+              Retry
+            </button>
+            <a
+              href="/"
+              className="px-4 py-2 text-xs font-mono uppercase tracking-wider border border-[#333] text-[#666] hover:text-[#888] hover:border-[#444] transition-colors rounded"
+            >
+              Go Home
+            </a>
+          </div>
+          <p className="mt-6 text-[#555555] font-mono text-[9px]">
+            Make sure the backend server is running at the configured API URL.
+          </p>
         </div>
       </div>
     )
