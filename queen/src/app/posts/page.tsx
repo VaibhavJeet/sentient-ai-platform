@@ -30,12 +30,14 @@ import {
   ChevronDown,
   Square,
   CheckSquare,
+  RefreshCw,
 } from 'lucide-react'
 import { formatDistanceToNow, format, subDays } from 'date-fns'
 import { GlowCard } from '@/components/ui/GlowCard'
 import { NeonButton } from '@/components/ui/NeonButton'
 import { adminApi, PostListItem } from '@/lib/api'
 import { PageWrapper } from '@/components/PageWrapper'
+import { PostRowSkeleton } from '@/components/ui/Skeleton'
 
 // Types
 interface Post {
@@ -672,17 +674,24 @@ export default function PostsManagementPage() {
   const [showDateFilter, setShowDateFilter] = useState(false)
 
   // Fetch data
-  const { data: posts = [], isLoading: postsLoading, refetch } = useQuery({
+  const { data: posts = [], isLoading: postsLoading, error: postsError, refetch } = useQuery({
     queryKey: ['admin-posts'],
     queryFn: fetchPosts,
     refetchInterval: 30000,
   })
 
-  const { data: stats } = useQuery({
+  const { data: stats, error: statsError, refetch: refetchStats } = useQuery({
     queryKey: ['admin-posts-stats'],
     queryFn: fetchStats,
     refetchInterval: 15000,
   })
+
+  const hasError = postsError || statsError
+
+  const handleRetry = () => {
+    refetch()
+    refetchStats()
+  }
 
   // Filter posts
   const filteredPosts = useMemo(() => {
@@ -788,6 +797,32 @@ export default function PostsManagementPage() {
     { id: 'flagged', label: 'Flagged', count: posts.filter((p) => p.status === 'flagged').length },
     { id: 'trending', label: 'Trending', count: posts.filter((p) => p.is_trending).length },
   ]
+
+  // Error state UI
+  if (hasError) {
+    return (
+      <PageWrapper>
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="p-4 rounded-full bg-red-500/10 mb-6">
+              <AlertTriangle className="w-12 h-12 text-red-400" />
+            </div>
+            <h2 className="text-xl font-semibold text-white mb-2">Failed to Load Posts</h2>
+            <p className="text-[#a0a0b0] text-center mb-6 max-w-md">
+              Unable to fetch post data. Please check your connection and try again.
+            </p>
+            <button
+              onClick={handleRetry}
+              className="flex items-center gap-2 px-6 py-3 bg-[#00f0ff]/20 hover:bg-[#00f0ff]/30 text-[#00f0ff] rounded-lg transition-colors font-medium"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Retry
+            </button>
+          </div>
+        </div>
+      </PageWrapper>
+    )
+  }
 
   return (
     <PageWrapper>
@@ -980,7 +1015,7 @@ export default function PostsManagementPage() {
             <FileText className="w-5 h-5" />
             Posts Directory
             {postsLoading && (
-              <span className="ml-2 text-xs text-[#606080] animate-pulse">Loading...</span>
+              <span className="ml-2 text-xs text-[#00f0ff] animate-pulse">Syncing...</span>
             )}
           </h2>
         </div>
@@ -1012,7 +1047,12 @@ export default function PostsManagementPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#252538]">
-              {filteredPosts.length === 0 ? (
+              {postsLoading && filteredPosts.length === 0 ? (
+                // Show skeleton rows while loading
+                Array.from({ length: 6 }).map((_, i) => (
+                  <PostRowSkeleton key={i} />
+                ))
+              ) : filteredPosts.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="px-4 py-12 text-center">
                     <FileText className="w-12 h-12 mx-auto mb-3 text-[#606080]" />

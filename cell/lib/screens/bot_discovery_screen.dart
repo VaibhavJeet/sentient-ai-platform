@@ -33,6 +33,24 @@ class _BotDiscoveryScreenState extends State<BotDiscoveryScreen>
 
   String? _selectedPersonalityFilter;
   String? _selectedInterestFilter;
+  String? _selectedLifeStageFilter;
+  String? _selectedActivityLevelFilter;
+
+  // Advanced filter options
+  final List<Map<String, dynamic>> _lifeStages = [
+    {'name': 'All', 'icon': Icons.apps, 'color': AppTheme.neonCyan},
+    {'name': 'Young', 'icon': Icons.child_care, 'color': AppTheme.neonGreen},
+    {'name': 'Mature', 'icon': Icons.person, 'color': AppTheme.neonCyan},
+    {'name': 'Elder', 'icon': Icons.elderly, 'color': AppTheme.neonMagenta},
+    {'name': 'Ancient', 'icon': Icons.auto_awesome, 'color': AppTheme.neonAmber},
+  ];
+
+  final List<Map<String, dynamic>> _activityLevels = [
+    {'name': 'All', 'icon': Icons.apps, 'color': AppTheme.neonCyan},
+    {'name': 'High', 'icon': Icons.flash_on, 'color': AppTheme.neonGreen},
+    {'name': 'Medium', 'icon': Icons.trending_flat, 'color': AppTheme.neonAmber},
+    {'name': 'Low', 'icon': Icons.snooze, 'color': AppTheme.neonMagenta},
+  ];
 
   // Pagination state
   static const int _pageSize = 20;
@@ -159,9 +177,51 @@ class _BotDiscoveryScreenState extends State<BotDiscoveryScreen>
         final matchesInterest = _selectedInterestFilter == null ||
             _botMatchesInterestCategory(bot, _selectedInterestFilter!);
 
-        return matchesSearch && matchesPersonality && matchesInterest;
+        final matchesLifeStage = _selectedLifeStageFilter == null ||
+            _selectedLifeStageFilter == 'All' ||
+            _getLifeStage(bot).toLowerCase() == _selectedLifeStageFilter!.toLowerCase();
+
+        final matchesActivityLevel = _selectedActivityLevelFilter == null ||
+            _selectedActivityLevelFilter == 'All' ||
+            _getActivityLevel(bot).toLowerCase() == _selectedActivityLevelFilter!.toLowerCase();
+
+        return matchesSearch && matchesPersonality && matchesInterest &&
+               matchesLifeStage && matchesActivityLevel;
       }).toList();
     });
+  }
+
+  String _getLifeStage(BotProfile bot) {
+    // Determine life stage based on bot age or other characteristics
+    final bioLower = bot.bio.toLowerCase();
+    final interestsLower = bot.interests.map((i) => i.toLowerCase()).toList();
+
+    if (bioLower.contains('ancient') || bioLower.contains('eternal') ||
+        interestsLower.any((i) => i.contains('wisdom') || i.contains('history'))) {
+      return 'Ancient';
+    } else if (bioLower.contains('elder') || bioLower.contains('experienced') ||
+        bioLower.contains('veteran')) {
+      return 'Elder';
+    } else if (bioLower.contains('young') || bioLower.contains('new') ||
+        bioLower.contains('fresh') || bioLower.contains('emerging')) {
+      return 'Young';
+    }
+    return 'Mature';
+  }
+
+  String _getActivityLevel(BotProfile bot) {
+    // Determine activity level based on bot characteristics
+    final bioLower = bot.bio.toLowerCase();
+    final interestsCount = bot.interests.length;
+
+    if (bioLower.contains('active') || bioLower.contains('energetic') ||
+        bioLower.contains('dynamic') || interestsCount >= 5) {
+      return 'High';
+    } else if (bioLower.contains('quiet') || bioLower.contains('calm') ||
+        bioLower.contains('peaceful') || interestsCount <= 1) {
+      return 'Low';
+    }
+    return 'Medium';
   }
 
   bool _botMatchesInterestCategory(BotProfile bot, String category) {
@@ -352,6 +412,12 @@ class _BotDiscoveryScreenState extends State<BotDiscoveryScreen>
           ),
           const Spacer(),
           _buildHeaderButton(
+            icon: Icons.tune,
+            onTap: _showAdvancedFiltersBottomSheet,
+            hasActiveFilters: _hasActiveAdvancedFilters(),
+          ),
+          const SizedBox(width: 10),
+          _buildHeaderButton(
             icon: _isGridView ? Icons.view_list : Icons.grid_view,
             onTap: _toggleViewMode,
           ),
@@ -360,28 +426,99 @@ class _BotDiscoveryScreenState extends State<BotDiscoveryScreen>
     );
   }
 
-  Widget _buildHeaderButton({required IconData icon, required VoidCallback onTap}) {
+  bool _hasActiveAdvancedFilters() {
+    return _selectedLifeStageFilter != null ||
+           _selectedActivityLevelFilter != null ||
+           (_selectedPersonalityFilter != null && _selectedPersonalityFilter != 'All');
+  }
+
+  void _showAdvancedFiltersBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => _AdvancedFiltersBottomSheet(
+        selectedPersonality: _selectedPersonalityFilter,
+        selectedLifeStage: _selectedLifeStageFilter,
+        selectedActivityLevel: _selectedActivityLevelFilter,
+        personalityTypes: _personalityTypes,
+        lifeStages: _lifeStages,
+        activityLevels: _activityLevels,
+        onApplyFilters: (personality, lifeStage, activityLevel) {
+          setState(() {
+            _selectedPersonalityFilter = personality;
+            _selectedLifeStageFilter = lifeStage;
+            _selectedActivityLevelFilter = activityLevel;
+          });
+          _filterBots();
+          Navigator.pop(context);
+        },
+        onClearFilters: () {
+          setState(() {
+            _selectedPersonalityFilter = null;
+            _selectedLifeStageFilter = null;
+            _selectedActivityLevelFilter = null;
+          });
+          _filterBots();
+          Navigator.pop(context);
+        },
+      ),
+    );
+  }
+
+  Widget _buildHeaderButton({
+    required IconData icon,
+    required VoidCallback onTap,
+    bool hasActiveFilters = false,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedBuilder(
         animation: _glowController,
         builder: (context, child) {
-          return Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppTheme.glassBg,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: AppTheme.neonCyan.withValues(alpha: 0.3),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.neonCyan.withValues(alpha: 0.1 * _glowAnimation.value),
-                  blurRadius: 10,
+          return Stack(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: hasActiveFilters
+                      ? AppTheme.neonMagenta.withValues(alpha: 0.15)
+                      : AppTheme.glassBg,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: hasActiveFilters
+                        ? AppTheme.neonMagenta.withValues(alpha: 0.5)
+                        : AppTheme.neonCyan.withValues(alpha: 0.3),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: (hasActiveFilters ? AppTheme.neonMagenta : AppTheme.neonCyan)
+                          .withValues(alpha: 0.1 * _glowAnimation.value),
+                      blurRadius: 10,
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Icon(icon, color: AppTheme.neonCyan, size: 20),
+                child: Icon(
+                  icon,
+                  color: hasActiveFilters ? AppTheme.neonMagenta : AppTheme.neonCyan,
+                  size: 20,
+                ),
+              ),
+              if (hasActiveFilters)
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: AppTheme.neonMagenta,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppTheme.cyberBlack, width: 2),
+                    ),
+                  ),
+                ),
+            ],
           );
         },
       ),
@@ -562,12 +699,14 @@ class _BotDiscoveryScreenState extends State<BotDiscoveryScreen>
             ),
           ),
           const Spacer(),
-          if (_selectedPersonalityFilter != null)
+          if (_hasActiveAdvancedFilters())
             GestureDetector(
               onTap: () {
                 setState(() {
                   _selectedPersonalityFilter = null;
                   _selectedInterestFilter = null;
+                  _selectedLifeStageFilter = null;
+                  _selectedActivityLevelFilter = null;
                 });
                 _filterBots();
               },
@@ -1608,6 +1747,328 @@ class _BotListCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// Advanced filters bottom sheet
+class _AdvancedFiltersBottomSheet extends StatefulWidget {
+  final String? selectedPersonality;
+  final String? selectedLifeStage;
+  final String? selectedActivityLevel;
+  final List<Map<String, dynamic>> personalityTypes;
+  final List<Map<String, dynamic>> lifeStages;
+  final List<Map<String, dynamic>> activityLevels;
+  final Function(String?, String?, String?) onApplyFilters;
+  final VoidCallback onClearFilters;
+
+  const _AdvancedFiltersBottomSheet({
+    required this.selectedPersonality,
+    required this.selectedLifeStage,
+    required this.selectedActivityLevel,
+    required this.personalityTypes,
+    required this.lifeStages,
+    required this.activityLevels,
+    required this.onApplyFilters,
+    required this.onClearFilters,
+  });
+
+  @override
+  State<_AdvancedFiltersBottomSheet> createState() =>
+      _AdvancedFiltersBottomSheetState();
+}
+
+class _AdvancedFiltersBottomSheetState
+    extends State<_AdvancedFiltersBottomSheet> {
+  late String? _personality;
+  late String? _lifeStage;
+  late String? _activityLevel;
+
+  @override
+  void initState() {
+    super.initState();
+    _personality = widget.selectedPersonality;
+    _lifeStage = widget.selectedLifeStage;
+    _activityLevel = widget.selectedActivityLevel;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppTheme.cyberDark,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle bar
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppTheme.textMuted.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        AppTheme.neonCyan.withValues(alpha: 0.2),
+                        AppTheme.neonMagenta.withValues(alpha: 0.2),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.tune,
+                    color: AppTheme.neonCyan,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Advanced Filters',
+                      style: TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      'Refine your being search',
+                      style: TextStyle(
+                        color: AppTheme.textMuted,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: widget.onClearFilters,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppTheme.neonRed.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: AppTheme.neonRed.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: const Text(
+                      'Clear',
+                      style: TextStyle(
+                        color: AppTheme.neonRed,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(color: AppTheme.glassBorder, height: 1),
+          // Filter sections
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Personality Traits
+                  _buildFilterSection(
+                    title: 'Personality Traits',
+                    icon: Icons.psychology,
+                    options: widget.personalityTypes,
+                    selectedValue: _personality,
+                    onSelect: (value) => setState(() => _personality = value),
+                  ),
+                  const SizedBox(height: 24),
+                  // Life Stage
+                  _buildFilterSection(
+                    title: 'Life Stage',
+                    icon: Icons.timeline,
+                    options: widget.lifeStages,
+                    selectedValue: _lifeStage,
+                    onSelect: (value) => setState(() => _lifeStage = value),
+                  ),
+                  const SizedBox(height: 24),
+                  // Activity Level
+                  _buildFilterSection(
+                    title: 'Activity Level',
+                    icon: Icons.speed,
+                    options: widget.activityLevels,
+                    selectedValue: _activityLevel,
+                    onSelect: (value) => setState(() => _activityLevel = value),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Apply button
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              12,
+              20,
+              MediaQuery.of(context).padding.bottom + 20,
+            ),
+            child: GestureDetector(
+              onTap: () => widget.onApplyFilters(
+                _personality,
+                _lifeStage,
+                _activityLevel,
+              ),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [AppTheme.neonCyan, AppTheme.neonMagenta],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.neonCyan.withValues(alpha: 0.3),
+                      blurRadius: 15,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.check, color: Colors.white, size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Apply Filters',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterSection({
+    required String title,
+    required IconData icon,
+    required List<Map<String, dynamic>> options,
+    required String? selectedValue,
+    required Function(String?) onSelect,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: AppTheme.neonCyan, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: options.map((option) {
+            final name = option['name'] as String;
+            final optionIcon = option['icon'] as IconData;
+            final color = option['color'] as Color;
+            final isSelected = selectedValue == name ||
+                (name == 'All' && selectedValue == null);
+
+            return GestureDetector(
+              onTap: () => onSelect(name == 'All' ? null : name),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  gradient: isSelected
+                      ? LinearGradient(
+                          colors: [
+                            color.withValues(alpha: 0.3),
+                            color.withValues(alpha: 0.15),
+                          ],
+                        )
+                      : null,
+                  color: isSelected ? null : AppTheme.glassBg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSelected
+                        ? color.withValues(alpha: 0.6)
+                        : AppTheme.glassBorder,
+                    width: isSelected ? 1.5 : 1,
+                  ),
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: color.withValues(alpha: 0.2),
+                            blurRadius: 10,
+                            spreadRadius: 1,
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      optionIcon,
+                      size: 16,
+                      color: isSelected ? color : AppTheme.textMuted,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      name,
+                      style: TextStyle(
+                        color: isSelected ? color : AppTheme.textSecondary,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.normal,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 }

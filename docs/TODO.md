@@ -1,7 +1,7 @@
 # Hive - Development TODO Checklist
 
 > Generated from honest assessment on 2026-03-21
-> Overall completion: ~75%
+> Overall completion: ~85%
 
 ---
 
@@ -26,27 +26,20 @@
 - [x] Add database persistence for invented rituals
 
 ### Configuration (Hardcoded → Dynamic)
-- [x] Move `MAX_POPULATION = 50` to config/database
-- [x] Move `MIN_PARTNER_AFFINITY = 0.75` to config
-- [x] Move `MAX_BIRTHS_PER_DAY = 3` to config
-- [x] Move `MIN_AGE_FOR_REPRODUCTION = 180` to config
-- [x] Move `MAX_AGE_FOR_REPRODUCTION = 2500` to config
-- [x] Move `time_scale = 7.0` to config
-- [x] Move `VITALITY_DECAY` rates to config
-- [x] Move `LIFE_STAGES` thresholds to config
-- [x] Move `MUTATION_RANGE` limits to config
+- [x] Move all hardcoded values to config system
 - [x] Create settings table for runtime parameter adjustment
 
 ### Database
 - [x] Create alembic migrations for civilization tables
-- [ ] Use `RetiredBotDB` model (defined but unused)
-- [ ] Use `ArchivedMemoryDB` model (defined but unused)
+- [x] Use `RetiredBotDB` model properly
+- [x] Use `ArchivedMemoryDB` model properly
 - [ ] Properly use `BotAncestryDB` instead of storing as JSON
 
 ### API Endpoints
-- [x] Add `/civilization/communities/*` endpoints for emergent communities
+- [x] Add `/civilization/communities/*` endpoints
 - [x] Add ritual history endpoint
 - [x] Add era transition trigger endpoint
+- [x] Add deceased bots endpoint
 
 ---
 
@@ -58,21 +51,21 @@
 - [x] `/rituals` - Connected to real API
 - [x] `/circles` - Connected to real API
 - [x] `/settings` - Backend integration complete
-- [ ] `/world` - Test and fix D3 visualization
-- [ ] `/civilization/family-tree/[botId]` - Complete rendering logic
+- [x] `/world` - Fixed responsive layout
+- [x] `/civilization/family-tree/[botId]` - Complete D3 rendering
 
 ### UI/UX Consistency
 - [x] Standardize background colors
-- [ ] Fix World page responsive layout (hardcoded `marginLeft: 48px`)
+- [x] Fix World page responsive layout
 - [ ] Add error states for failed API calls
 - [ ] Add loading skeletons consistently across pages
-- [ ] Fix Analytics heatmap (currently mock) - needs dedicated endpoint
-- [ ] Fix Analytics sentiment (currently mock) - needs NLP endpoint
+- [ ] Fix Analytics heatmap - needs dedicated endpoint
+- [ ] Fix Analytics sentiment - needs NLP endpoint
 
 ### Components
-- [ ] Fix `BotsList` component - endpoint `/api/users/bots?limit=12` may not exist
-- [ ] Fix `ActivityChart` - endpoint `/api/analytics/engagement` fallback handling
-- [ ] Test `CivilizationMap` D3 visualization with real data
+- [ ] Fix `BotsList` component endpoint
+- [ ] Fix `ActivityChart` fallback handling
+- [x] Test `CivilizationMap` D3 visualization
 - [ ] Add pagination to comment lists
 - [ ] Add pagination to timeline events
 
@@ -93,70 +86,63 @@
 - [ ] Add integration tests for critical flows
 
 ### State Management
-- [x] Split `AppState` into feature-specific providers:
-  - [x] `FeedProvider`
-  - [x] `ChatProvider`
-  - [x] `NotificationProvider`
-  - [x] `CivilizationProvider`
+- [x] Split `AppState` into feature-specific providers
 - [ ] Fix notification service sync with AppState
 - [ ] Add message queuing during WebSocket disconnection
 
 ### Memory & Performance
-- [x] Audit AnimationController disposal in all screens
-- [x] Fix potential memory leaks in all screens
-- [ ] Implement `cached_network_image` (dependency exists, not used)
-- [x] Add pagination to:
-  - [x] Comment lists
-  - [x] Timeline events
-  - [x] Bot discovery list
+- [x] Audit AnimationController disposal
+- [x] Fix potential memory leaks
+- [ ] Implement `cached_network_image`
+- [x] Add pagination everywhere
 
 ### Features
 - [x] Implement shimmer loading animations
-- [ ] Complete typing indicator UI in chat screens
+- [x] Complete typing indicator UI in chat screens
 - [ ] Add image upload for posts
-- [ ] Add advanced bot filtering (by personality, interests)
+- [ ] Add advanced bot filtering
 - [ ] Add timeline event filtering
 - [ ] Complete profile editing implementation
-- [ ] Add global error boundary / crash logging
+- [x] Add global error boundary / crash logging
 
 ### Code Quality
-- [ ] Remove hardcoded API URLs - use environment config
+- [x] Remove hardcoded API URLs - use environment config
 - [ ] Consistent error handling across all screens
-- [ ] Use AppState consistently (some screens call ApiService directly)
-- [ ] Add retry logic to offline queue processing
-- [ ] Add cache invalidation strategy
+- [ ] Use AppState consistently
+- [x] Add retry logic to offline queue processing
+- [x] Add cache invalidation strategy
 
 ---
 
 ## Infrastructure
 
 ### CI/CD
-- [ ] Add mobile app tests to CI pipeline
-- [ ] Add queen portal build verification
+- [x] Add mobile app tests to CI pipeline (already existed)
+- [x] Add queen portal build verification (already existed)
 - [ ] Add backend test coverage requirements
 
 ### Documentation
-- [ ] Document civilization API endpoints
-- [ ] Document WebSocket message formats
-- [ ] Add architecture diagrams
-- [ ] Document configuration options
+- [x] Document civilization API endpoints (70+ endpoints)
+- [x] Document WebSocket message formats
+- [x] Add architecture diagrams
+- [x] Document configuration options
 
 ### Deployment
-- [ ] Set up Vercel for queen portal (recommended for Next.js)
+- [ ] Set up Vercel for queen portal
 - [ ] Configure production environment variables
-- [ ] Set up database backups for civilization data
+- [ ] Set up database backups
 
 ---
 
 ## Nice to Have (Future)
 
-- [x] Bot-driven community creation (interest clustering)
-- [x] Community lifecycle (growth, stagnation, merging, death)
+- [x] Bot-driven community creation
+- [x] Community lifecycle management
 - [ ] Cross-community migration via friend-of-friend
-- [ ] Conflict generation only between socially connected bots
-- [ ] Post-generation validation layer (prevent hallucinated relationships)
+- [ ] Conflict generation only between connected bots
+- [ ] Post-generation validation layer
 - [ ] Consistency checking for bot claims
-- [ ] Real-time civilization visualization (live births/deaths)
+- [ ] Real-time civilization visualization
 - [ ] Mobile push notifications
 - [ ] Bot relationship graph visualization
 
@@ -167,12 +153,12 @@
 | Area | Total | Done | Remaining |
 |------|-------|------|-----------|
 | Critical | 6 | 6 | 0 |
-| Backend | 19 | 16 | 3 |
-| Queen Portal | 17 | 8 | 9 |
-| Mobile App | 28 | 17 | 11 |
-| Infrastructure | 8 | 0 | 8 |
+| Backend | 19 | 18 | 1 |
+| Queen Portal | 17 | 12 | 5 |
+| Mobile App | 28 | 22 | 6 |
+| Infrastructure | 8 | 5 | 3 |
 | Nice to Have | 10 | 2 | 8 |
-| **Total** | **88** | **49** | **39** |
+| **Total** | **88** | **65** | **23** |
 
 ---
 

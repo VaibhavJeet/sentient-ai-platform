@@ -48,6 +48,7 @@ export default {
         'border-flow': 'border-flow 3s linear infinite',
         'data-stream': 'data-stream 20s linear infinite',
         'typing': 'typing 3.5s steps(40, end), blink-caret .75s step-end infinite',
+        'shimmer': 'shimmer 1.5s ease-in-out infinite',
       },
       keyframes: {
         'glow-pulse': {
@@ -89,6 +90,10 @@ export default {
         'blink-caret': {
           'from, to': { borderColor: 'transparent' },
           '50%': { borderColor: '#00f0ff' },
+        },
+        'shimmer': {
+          '0%': { backgroundPosition: '200% 0' },
+          '100%': { backgroundPosition: '-200% 0' },
         },
       },
       backdropBlur: {

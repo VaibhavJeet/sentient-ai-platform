@@ -212,23 +212,32 @@ export default function SystemPage() {
   const [resources, setResources] = useState(getResourceData())
   const [performanceData] = useState(generatePerformanceData())
 
-  const { data: health } = useQuery({
+  const { data: health, error: healthError, refetch: refetchHealth } = useQuery({
     queryKey: ['health-detailed'],
     queryFn: fetchHealth,
     refetchInterval: 5000,
   })
 
-  const { data: metrics } = useQuery({
+  const { data: metrics, refetch: refetchMetrics } = useQuery({
     queryKey: ['metrics'],
     queryFn: fetchMetrics,
     refetchInterval: 10000,
   })
 
-  const { data: engineStatus } = useQuery({
+  const { data: engineStatus, error: engineError, refetch: refetchEngine } = useQuery({
     queryKey: ['engine-status'],
     queryFn: fetchEngineStatus,
     refetchInterval: 15000,
   })
+
+  // Show error only if critical services fail (health and engine status)
+  const hasError = healthError && engineError
+
+  const handleRetry = () => {
+    refetchHealth()
+    refetchMetrics()
+    refetchEngine()
+  }
 
   // Simulate uptime counter
   useEffect(() => {
@@ -302,6 +311,32 @@ export default function SystemPage() {
   }, [])
 
   const services = getServiceData()
+
+  // Error state UI
+  if (hasError) {
+    return (
+      <PageWrapper>
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="p-4 rounded-full bg-red-500/10 mb-6">
+              <AlertTriangle className="w-12 h-12 text-red-400" />
+            </div>
+            <h2 className="text-xl font-semibold text-white mb-2">Failed to Load System Status</h2>
+            <p className="text-[#a0a0b0] text-center mb-6 max-w-md">
+              Unable to fetch system health data. Please check that the API server is running.
+            </p>
+            <button
+              onClick={handleRetry}
+              className="flex items-center gap-2 px-6 py-3 bg-[#00f0ff]/20 hover:bg-[#00f0ff]/30 text-[#00f0ff] rounded-lg transition-colors font-medium"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Retry
+            </button>
+          </div>
+        </div>
+      </PageWrapper>
+    )
+  }
 
   return (
     <PageWrapper>

@@ -42,6 +42,7 @@ import {
 import { format } from 'date-fns'
 import Image from 'next/image'
 import { PageWrapper } from '@/components/PageWrapper'
+import { BotCardSkeleton, BotListRowSkeleton } from '@/components/ui/Skeleton'
 
 // Types
 interface BotDetail {
@@ -1105,17 +1106,24 @@ export default function BotsPage() {
   const [selectedBots, setSelectedBots] = useState<Set<string>>(new Set())
   const [selectedBot, setSelectedBot] = useState<BotDetail | null>(null)
 
-  const { data: bots, isLoading } = useQuery({
+  const { data: bots, isLoading, error: botsError, refetch: refetchBots } = useQuery({
     queryKey: ['admin-bots'],
     queryFn: fetchBots,
     refetchInterval: 30000,
   })
 
-  const { data: stats } = useQuery({
+  const { data: stats, error: statsError, refetch: refetchStats } = useQuery({
     queryKey: ['admin-bots-stats'],
     queryFn: fetchBotStats,
     refetchInterval: 60000,
   })
+
+  const hasError = botsError || statsError
+
+  const handleRetry = () => {
+    refetchBots()
+    refetchStats()
+  }
 
   // Filter bots
   const filteredBots = useMemo(() => {
@@ -1169,6 +1177,32 @@ export default function BotsPage() {
   const clearSelection = useCallback(() => {
     setSelectedBots(new Set())
   }, [])
+
+  // Error state UI
+  if (hasError) {
+    return (
+      <PageWrapper>
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="p-4 rounded-full bg-red-500/10 mb-6">
+              <AlertTriangle className="w-12 h-12 text-red-400" />
+            </div>
+            <h2 className="text-xl font-semibold text-white mb-2">Failed to Load Bots</h2>
+            <p className="text-[#a0a0b0] text-center mb-6 max-w-md">
+              Unable to fetch bot data. Please check your connection and try again.
+            </p>
+            <button
+              onClick={handleRetry}
+              className="flex items-center gap-2 px-6 py-3 bg-[#00f0ff]/20 hover:bg-[#00f0ff]/30 text-[#00f0ff] rounded-lg transition-colors font-medium"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Retry
+            </button>
+          </div>
+        </div>
+      </PageWrapper>
+    )
+  }
 
   return (
     <PageWrapper>
@@ -1315,12 +1349,19 @@ export default function BotsPage() {
 
       {/* Bot Grid/List */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-12 h-12 border-2 border-[#00f0ff] border-t-transparent rounded-full animate-spin" />
-            <p className="text-[#606080]">Loading bot fleet...</p>
+        viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <BotCardSkeleton key={i} />
+            ))}
           </div>
-        </div>
+        ) : (
+          <div className="space-y-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <BotListRowSkeleton key={i} />
+            ))}
+          </div>
+        )
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredBots.map((bot) => (

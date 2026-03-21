@@ -28,6 +28,7 @@ import {
 import { GlowCard } from '@/components/ui/GlowCard'
 import { NeonButton } from '@/components/ui/NeonButton'
 import { PageWrapper } from '@/components/PageWrapper'
+import { LogEntrySkeleton } from '@/components/ui/Skeleton'
 
 // Types
 type LogLevel = 'info' | 'warning' | 'error' | 'debug'
@@ -151,7 +152,8 @@ function JsonHighlight({ data }: { data: object }) {
 }
 
 export default function LogsPage() {
-  const [logs, setLogs] = useState<LogEntry[]>(() => generateMockLogs(50))
+  const [logs, setLogs] = useState<LogEntry[]>([])
+  const [isInitialLoading, setIsInitialLoading] = useState(true)
   const [levelFilter, setLevelFilter] = useState<LogLevel | 'all'>('all')
   const [serviceFilter, setServiceFilter] = useState<ServiceType | 'all'>('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -161,6 +163,15 @@ export default function LogsPage() {
   const [copied, setCopied] = useState(false)
   const [newLogIds, setNewLogIds] = useState<Set<string>>(new Set())
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Simulate initial log loading
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLogs(generateMockLogs(50))
+      setIsInitialLoading(false)
+    }, 800)
+    return () => clearTimeout(timer)
+  }, [])
 
   // Stats calculation - for simplicity, just use all logs as "last 24h" for the demo
   const stats = useMemo(() => {
@@ -485,7 +496,13 @@ export default function LogsPage() {
               className="overflow-auto font-mono text-sm"
               style={{ maxHeight: '600px' }}
             >
-              {filteredLogs.length === 0 ? (
+              {isInitialLoading ? (
+                <div className="p-2 space-y-1">
+                  {Array.from({ length: 10 }).map((_, i) => (
+                    <LogEntrySkeleton key={i} />
+                  ))}
+                </div>
+              ) : filteredLogs.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-[#606080]">
                   <Activity className="w-12 h-12 mb-4 opacity-30" />
                   <p className="text-sm">No logs to display</p>

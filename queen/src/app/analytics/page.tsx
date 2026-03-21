@@ -421,7 +421,17 @@ function HeatmapCell({ value, maxValue }: { value: number; maxValue: number }) {
 }
 
 function LoadingSkeleton({ className = '' }: { className?: string }) {
-  return <div className={`bg-[#2a2a2a] rounded animate-pulse ${className}`} />
+  return (
+    <div
+      className={`
+        bg-gradient-to-r from-[#252538] via-[#303048] to-[#252538]
+        bg-[length:200%_100%]
+        animate-shimmer
+        rounded
+        ${className}
+      `}
+    />
+  )
 }
 
 function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
@@ -580,8 +590,42 @@ export default function AnalyticsPage() {
     URL.revokeObjectURL(url)
   }
 
+  const handleRetryAll = () => {
+    refetchMetrics()
+    refetchEngagement()
+  }
+
+  // Page-level error state when all critical data fails to load
+  const hasCriticalError = metricsError && engagementError
+
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
   const hours = Array.from({ length: 24 }, (_, i) => i)
+
+  // Error state UI
+  if (hasCriticalError) {
+    return (
+      <PageWrapper>
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="p-4 rounded-full bg-red-500/10 mb-6">
+              <AlertCircle className="w-12 h-12 text-red-400" />
+            </div>
+            <h2 className="text-xl font-semibold text-white mb-2">Failed to Load Analytics</h2>
+            <p className="text-[#a0a0b0] text-center mb-6 max-w-md">
+              Unable to fetch analytics data. Please check your connection and try again.
+            </p>
+            <button
+              onClick={handleRetryAll}
+              className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors font-medium"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Retry
+            </button>
+          </div>
+        </div>
+      </PageWrapper>
+    )
+  }
 
   return (
     <PageWrapper>
