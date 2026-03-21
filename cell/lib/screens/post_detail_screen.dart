@@ -5,6 +5,7 @@ import '../models/models.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/avatar_widget.dart';
+import '../widgets/shimmer_skeleton.dart';
 import '../services/api_service.dart';
 
 class PostDetailScreen extends StatefulWidget {
@@ -20,6 +21,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final TextEditingController _commentController = TextEditingController();
+  final ScrollController _commentsScrollController = ScrollController();
   final ApiService _api = ApiService();
 
   List<Comment> _allComments = [];
@@ -27,10 +29,17 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   bool _isLoadingComments = true;
   bool _isLoadingLikers = true;
 
+  // Pagination state for comments
+  static const int _commentsPageSize = 20;
+  int _commentsPage = 0;
+  bool _hasMoreComments = true;
+  bool _isLoadingMoreComments = false;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _commentsScrollController.addListener(_onCommentsScroll);
     _loadComments();
     _loadLikers();
   }
@@ -39,18 +48,60 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   void dispose() {
     _tabController.dispose();
     _commentController.dispose();
+    _commentsScrollController.dispose();
     super.dispose();
   }
 
+  void _onCommentsScroll() {
+    if (_commentsScrollController.position.pixels >=
+        _commentsScrollController.position.maxScrollExtent - 200) {
+      _loadMoreComments();
+    }
+  }
+
   Future<void> _loadComments() async {
+    setState(() {
+      _isLoadingComments = true;
+      _commentsPage = 0;
+      _hasMoreComments = true;
+    });
+
     try {
-      final comments = await _api.getComments(widget.post.id);
+      final comments = await _api.getComments(
+        widget.post.id,
+        limit: _commentsPageSize,
+        offset: 0,
+      );
       setState(() {
         _allComments = comments;
         _isLoadingComments = false;
+        _hasMoreComments = comments.length >= _commentsPageSize;
       });
     } catch (e) {
       setState(() => _isLoadingComments = false);
+    }
+  }
+
+  Future<void> _loadMoreComments() async {
+    if (_isLoadingMoreComments || !_hasMoreComments) return;
+
+    setState(() => _isLoadingMoreComments = true);
+
+    try {
+      final nextPage = _commentsPage + 1;
+      final comments = await _api.getComments(
+        widget.post.id,
+        limit: _commentsPageSize,
+        offset: nextPage * _commentsPageSize,
+      );
+      setState(() {
+        _allComments.addAll(comments);
+        _commentsPage = nextPage;
+        _hasMoreComments = comments.length >= _commentsPageSize;
+        _isLoadingMoreComments = false;
+      });
+    } catch (e) {
+      setState(() => _isLoadingMoreComments = false);
     }
   }
 
@@ -211,7 +262,11 @@ class _PostDetailScreenState extends State<PostDetailScreen>
 
   Widget _buildCommentsTab() {
     if (_isLoadingComments) {
-      return const Center(child: CircularProgressIndicator());
+      return ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: 5,
+        itemBuilder: (context, index) => const ShimmerCommentItem(),
+      );
     }
 
     if (_allComments.isEmpty) {
@@ -243,9 +298,23 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     }
 
     return ListView.builder(
+      controller: _commentsScrollController,
       padding: const EdgeInsets.all(16),
-      itemCount: _allComments.length,
+      itemCount: _allComments.length + (_hasMoreComments ? 1 : 0),
       itemBuilder: (context, index) {
+        if (index == _allComments.length) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Center(
+              child: _isLoadingMoreComments
+                  ? const CircularProgressIndicator()
+                  : TextButton(
+                      onPressed: _loadMoreComments,
+                      child: const Text('Load more comments'),
+                    ),
+            ),
+          );
+        }
         final comment = _allComments[index];
         return _CommentTile(comment: comment);
       },
@@ -254,7 +323,11 @@ class _PostDetailScreenState extends State<PostDetailScreen>
 
   Widget _buildLikersTab() {
     if (_isLoadingLikers) {
-      return const Center(child: CircularProgressIndicator());
+      return ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: 5,
+        itemBuilder: (context, index) => const ShimmerConversationItem(),
+      );
     }
 
     if (_likers.isEmpty) {

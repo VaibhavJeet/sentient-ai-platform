@@ -4,6 +4,7 @@ import '../theme/app_theme.dart';
 import '../providers/app_state.dart';
 import '../models/models.dart';
 import '../widgets/avatar_widget.dart';
+import '../widgets/shimmer_skeleton.dart';
 import 'chat_detail_screen.dart';
 import 'bot_profile_screen.dart';
 
@@ -32,6 +33,12 @@ class _BotDiscoveryScreenState extends State<BotDiscoveryScreen>
 
   String? _selectedPersonalityFilter;
   String? _selectedInterestFilter;
+
+  // Pagination state
+  static const int _pageSize = 20;
+  int _currentPage = 0;
+  bool _hasMore = true;
+  bool _isLoadingMore = false;
 
   final List<Map<String, dynamic>> _personalityTypes = [
     {'name': 'All', 'icon': Icons.apps, 'color': AppTheme.neonCyan},
@@ -72,6 +79,7 @@ class _BotDiscoveryScreenState extends State<BotDiscoveryScreen>
 
   @override
   void dispose() {
+    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     _tabController.dispose();
     _pulseController.dispose();
@@ -83,21 +91,48 @@ class _BotDiscoveryScreenState extends State<BotDiscoveryScreen>
     setState(() {
       _isLoading = true;
       _error = null;
+      _currentPage = 0;
+      _hasMore = true;
     });
 
     try {
       final appState = context.read<AppState>();
-      final bots = await appState.loadBots();
+      final bots = await appState.loadBots(limit: _pageSize, offset: 0);
       setState(() {
         _allBots = bots;
         _filteredBots = bots;
         _isLoading = false;
+        _hasMore = bots.length >= _pageSize;
       });
     } catch (e) {
       setState(() {
         _error = 'Failed to load bots: $e';
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _loadMoreBots() async {
+    if (_isLoadingMore || !_hasMore) return;
+
+    setState(() => _isLoadingMore = true);
+
+    try {
+      final appState = context.read<AppState>();
+      final nextPage = _currentPage + 1;
+      final bots = await appState.loadBots(
+        limit: _pageSize,
+        offset: nextPage * _pageSize,
+      );
+      setState(() {
+        _allBots.addAll(bots);
+        _filterBots(); // Re-apply filters to include new bots
+        _currentPage = nextPage;
+        _hasMore = bots.length >= _pageSize;
+        _isLoadingMore = false;
+      });
+    } catch (e) {
+      setState(() => _isLoadingMore = false);
     }
   }
 
@@ -565,49 +600,26 @@ class _BotDiscoveryScreenState extends State<BotDiscoveryScreen>
   }
 
   Widget _buildLoadingState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          AnimatedBuilder(
-            animation: _pulseController,
-            builder: (context, child) {
-              return Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: AppTheme.neonCyan.withValues(alpha: 0.5),
-                    width: 2,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.neonCyan.withValues(alpha: 0.3 * _pulseAnimation.value),
-                      blurRadius: 20,
-                      spreadRadius: 5,
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.smart_toy,
-                  color: AppTheme.neonCyan,
-                  size: 36,
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Discovering beings...',
-            style: TextStyle(
-              color: AppTheme.textMuted,
-              fontSize: 14,
-            ),
-          ),
-        ],
-      ),
-    );
+    // Show shimmer grid/list based on current view mode
+    if (_isGridView) {
+      return GridView.builder(
+        padding: const EdgeInsets.all(16),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 0.85,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+        ),
+        itemCount: 6,
+        itemBuilder: (context, index) => const ShimmerBotGridCard(),
+      );
+    } else {
+      return ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        itemCount: 6,
+        itemBuilder: (context, index) => const ShimmerBotListCard(),
+      );
+    }
   }
 
   Widget _buildErrorState() {
@@ -690,23 +702,35 @@ class _BotDiscoveryScreenState extends State<BotDiscoveryScreen>
       return _buildEmptyState();
     }
 
-    return RefreshIndicator(
-      onRefresh: _loadBots,
-      color: AppTheme.neonCyan,
-      backgroundColor: AppTheme.cyberDark,
-      child: CustomScrollView(
-        slivers: [
-          // Trending section header (only for Trending tab)
-          if (section == 'Trending' && bots.length > 3)
+    return NotificationListener<ScrollNotification>(
+      onNotification: (scrollInfo) {
+        if (scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent - 200) {
+          _loadMoreBots();
+        }
+        return false;
+      },
+      child: RefreshIndicator(
+        onRefresh: _loadBots,
+        color: AppTheme.neonCyan,
+        backgroundColor: AppTheme.cyberDark,
+        child: CustomScrollView(
+          slivers: [
+            // Trending section header (only for Trending tab)
+            if (section == 'Trending' && bots.length > 3)
+              SliverToBoxAdapter(
+                child: _buildTrendingSection(bots.take(3).toList()),
+              ),
+            // Main grid/list
+            _isGridView
+                ? _buildGridView(section == 'Trending' && bots.length > 3 ? bots.skip(3).toList() : bots)
+                : _buildListView(section == 'Trending' && bots.length > 3 ? bots.skip(3).toList() : bots),
+            // Load more indicator
             SliverToBoxAdapter(
-              child: _buildTrendingSection(bots.take(3).toList()),
+              child: _buildLoadMoreIndicator(),
             ),
-          // Main grid/list
-          _isGridView
-              ? _buildGridView(section == 'Trending' && bots.length > 3 ? bots.skip(3).toList() : bots)
-              : _buildListView(section == 'Trending' && bots.length > 3 ? bots.skip(3).toList() : bots),
-          const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
-        ],
+            const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
+          ],
+        ),
       ),
     );
   }
@@ -902,6 +926,43 @@ class _BotDiscoveryScreenState extends State<BotDiscoveryScreen>
           },
           childCount: bots.length,
         ),
+      ),
+    );
+  }
+
+  Widget _buildLoadMoreIndicator() {
+    if (!_hasMore) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Center(
+        child: _isLoadingMore
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation(AppTheme.neonCyan),
+                ),
+              )
+            : GestureDetector(
+                onTap: _loadMoreBots,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.glassBg,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppTheme.neonCyan.withValues(alpha: 0.3)),
+                  ),
+                  child: const Text(
+                    'Load more beings',
+                    style: TextStyle(
+                      color: AppTheme.neonCyan,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
       ),
     );
   }

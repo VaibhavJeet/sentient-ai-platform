@@ -228,6 +228,67 @@ export interface AuthenticityMode {
   description: string;
 }
 
+// Settings Types
+export interface GeneralSettings {
+  site_name: string;
+  site_description: string;
+  maintenance_mode: boolean;
+  debug_mode: boolean;
+}
+
+export interface BotSettings {
+  max_active_bots: number;
+  response_delay: number;
+  activity_level: number;
+  auto_learning: boolean;
+  emotional_engine: boolean;
+  context_memory: boolean;
+}
+
+export interface AuthSettings {
+  jwt_expiry_hours: number;
+  refresh_token_expiry_days: number;
+  max_login_attempts: number;
+  lockout_duration_minutes: number;
+  two_factor_enabled: boolean;
+  session_timeout_minutes: number;
+}
+
+export interface ModerationSettings {
+  auto_flag_threshold: number;
+  toxicity_threshold: number;
+  spam_detection: boolean;
+  profanity_filter: boolean;
+  image_moderation: boolean;
+  link_scanning: boolean;
+}
+
+export interface NotificationSettings {
+  email_notifications: boolean;
+  push_notifications: boolean;
+  sms_notifications: boolean;
+  admin_alerts: boolean;
+  report_digest: 'hourly' | 'daily' | 'weekly';
+  critical_alerts_email: string;
+}
+
+export interface AllSettings {
+  general: GeneralSettings;
+  bot: BotSettings;
+  auth: AuthSettings;
+  moderation: ModerationSettings;
+  notifications: NotificationSettings;
+  updated_at: string | null;
+}
+
+export interface UpdateSettingsRequest {
+  general?: GeneralSettings;
+  bot?: BotSettings;
+  auth?: AuthSettings;
+  moderation?: ModerationSettings;
+  notifications?: NotificationSettings;
+}
+
 // API Error class
 export class APIError extends Error {
   constructor(
@@ -449,6 +510,63 @@ export const healthApi = {
   check: () => apiFetch<HealthStatus>('/health'),
 
   detailed: () => apiFetch<HealthStatus>('/health/detailed'),
+};
+
+// Settings API
+export const settingsApi = {
+  // Get all settings
+  getAll: () => apiFetch<AllSettings>('/settings'),
+
+  // Update settings (partial update)
+  update: (settings: UpdateSettingsRequest) =>
+    apiFetch<AllSettings>('/settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    }),
+
+  // Reset all settings to defaults
+  reset: () =>
+    apiFetch<AllSettings>('/settings/reset', {
+      method: 'POST',
+    }),
+
+  // Individual section getters
+  getGeneral: () => apiFetch<GeneralSettings>('/settings/general'),
+  getBot: () => apiFetch<BotSettings>('/settings/bot'),
+  getAuth: () => apiFetch<AuthSettings>('/settings/auth'),
+  getModeration: () => apiFetch<ModerationSettings>('/settings/moderation'),
+  getNotifications: () => apiFetch<NotificationSettings>('/settings/notifications'),
+
+  // Individual section updaters
+  updateGeneral: (settings: GeneralSettings) =>
+    apiFetch<GeneralSettings>('/settings/general', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    }),
+
+  updateBot: (settings: BotSettings) =>
+    apiFetch<BotSettings>('/settings/bot', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    }),
+
+  updateAuth: (settings: AuthSettings) =>
+    apiFetch<AuthSettings>('/settings/auth', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    }),
+
+  updateModeration: (settings: ModerationSettings) =>
+    apiFetch<ModerationSettings>('/settings/moderation', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    }),
+
+  updateNotifications: (settings: NotificationSettings) =>
+    apiFetch<NotificationSettings>('/settings/notifications', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    }),
 };
 
 // Platform API

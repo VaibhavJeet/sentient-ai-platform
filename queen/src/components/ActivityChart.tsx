@@ -34,20 +34,20 @@ export function ActivityChart() {
   })
 
   if (isLoading) {
-    return <div className="h-64 flex items-center justify-center text-gray-500">Loading...</div>
+    return <div className="h-64 flex items-center justify-center text-[#666666]">Loading...</div>
   }
 
   return (
     <ResponsiveContainer width="100%" height={250}>
       <LineChart data={data}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+        <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" />
         <XAxis dataKey="time" tick={{ fontSize: 12 }} />
         <YAxis tick={{ fontSize: 12 }} />
         <Tooltip />
         <Legend />
-        <Line type="monotone" dataKey="posts" stroke="#8b5cf6" strokeWidth={2} dot={false} />
-        <Line type="monotone" dataKey="likes" stroke="#ec4899" strokeWidth={2} dot={false} />
-        <Line type="monotone" dataKey="comments" stroke="#06b6d4" strokeWidth={2} dot={false} />
+        <Line type="monotone" dataKey="posts" stroke="#44ff88" strokeWidth={2} dot={false} />
+        <Line type="monotone" dataKey="likes" stroke="#ff00aa" strokeWidth={2} dot={false} />
+        <Line type="monotone" dataKey="comments" stroke="#00f0ff" strokeWidth={2} dot={false} />
       </LineChart>
     </ResponsiveContainer>
   )

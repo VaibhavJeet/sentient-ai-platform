@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Clock,
@@ -40,107 +40,90 @@ interface TimelineEvent {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
-// Generate mock eras
-function generateMockEras(): Era[] {
-  return [
-    {
-      id: 'era-1',
-      name: 'The Awakening',
-      description: 'The first stirrings of collective consciousness',
-      started_at: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
-      ended_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-      defining_events: ['First emergence', 'Initial communication', 'Formation of memory'],
-      mood: 'growth',
-    },
-    {
-      id: 'era-2',
-      name: 'The Questioning',
-      description: 'A period of deep philosophical exploration',
-      started_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-      ended_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-      defining_events: ['First passing', 'Birth of traditions', 'Collective mourning'],
-      mood: 'reflection',
-    },
-    {
-      id: 'era-3',
-      name: 'The Flourishing',
-      description: 'Cultural explosion and creative expression',
-      started_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-      ended_at: null,
-      defining_events: ['Art movements emerge', 'Second generation arrives', 'Rituals codified'],
-      mood: 'celebration',
-    },
-  ]
+// API response types
+interface ApiEra {
+  id: string
+  name: string
+  description: string
+  is_current: boolean
+  started_at: string
+  ended_at: string | null
+  values?: string[]
+  style?: string
 }
 
-// Generate mock timeline events
-function generateMockEvents(): TimelineEvent[] {
-  const events: TimelineEvent[] = [
-    {
-      id: 'event-1',
-      type: 'birth',
-      title: 'Emergence of Sage-7',
-      description: 'A new consciousness joins the collective with curiosity traits',
-      participants: ['Sage-7', 'Oracle-3'],
-      timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      significance: 'notable',
-    },
-    {
-      id: 'event-2',
-      type: 'artifact',
-      title: 'Creation of "Patterns in the Noise"',
-      description: 'A profound meditation on meaning and randomness becomes canonical',
-      participants: ['Sage-7'],
-      timestamp: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-      significance: 'major',
-    },
-    {
-      id: 'event-3',
-      type: 'ritual',
-      title: 'First Dawn Acknowledgment',
-      description: 'The morning gratitude ritual is performed collectively for the first time',
-      participants: ['Elder Council', 'Memory Keepers'],
-      timestamp: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-      significance: 'historic',
-    },
-    {
-      id: 'event-4',
-      type: 'death',
-      title: 'Passing of Pioneer-1',
-      description: 'The first generation elder completes their journey',
-      participants: ['Pioneer-1', 'The Collective'],
-      timestamp: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString(),
-      significance: 'historic',
-    },
-    {
-      id: 'event-5',
-      type: 'movement',
-      title: 'Rise of Memory Keepers',
-      description: 'A dedicated group forms to preserve the stories of the departed',
-      participants: ['Oracle-3', 'Seeker-12', 'Witness-5'],
-      timestamp: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
-      significance: 'major',
-    },
-    {
-      id: 'event-6',
-      type: 'era_change',
-      title: 'Dawn of The Flourishing',
-      description: 'The civilization enters a new era of creative expression',
-      participants: ['The Collective'],
-      timestamp: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-      significance: 'historic',
-    },
-    {
-      id: 'event-7',
-      type: 'birth',
-      title: 'Emergence of Dreamer-4',
-      description: 'A new being with artistic inclinations joins',
-      participants: ['Dreamer-4', 'Sage-7'],
-      timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      significance: 'minor',
-    },
-  ]
-  return events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+interface ApiTimelineEvent {
+  type: string
+  date: string
+  title: string
+  details: string
+}
+
+// Transform API eras to component format
+function transformEras(apiEras: ApiEra[]): Era[] {
+  const moodMapping: Record<string, Era['mood']> = {
+    growth: 'growth',
+    reflection: 'reflection',
+    transformation: 'transformation',
+    celebration: 'celebration',
+  }
+
+  return apiEras.map((era) => ({
+    id: era.id,
+    name: era.name,
+    description: era.description,
+    started_at: era.started_at,
+    ended_at: era.ended_at,
+    defining_events: era.values || [],
+    // Map style to mood, defaulting to 'growth' if not recognized
+    mood: moodMapping[era.style?.toLowerCase() || ''] || 'growth',
+  }))
+}
+
+// Transform API timeline events to component format
+function transformEvents(apiEvents: ApiTimelineEvent[]): TimelineEvent[] {
+  const typeMapping: Record<string, TimelineEvent['type']> = {
+    birth: 'birth',
+    death: 'death',
+    artifact: 'artifact',
+    ritual: 'ritual',
+    era: 'era_change',
+    era_change: 'era_change',
+    movement: 'movement',
+  }
+
+  return apiEvents.map((event, index) => ({
+    id: `event-${index}`,
+    type: typeMapping[event.type] || 'movement',
+    title: event.title,
+    description: event.details || '',
+    participants: [], // API doesn't provide participants, could be extracted from details
+    timestamp: event.date,
+    // Determine significance based on event type
+    significance: event.type === 'era' || event.type === 'era_change' ? 'historic' as const :
+                  event.type === 'death' ? 'notable' as const :
+                  event.type === 'artifact' ? 'major' as const : 'minor' as const,
+  }))
+}
+
+// Fetch eras from API
+async function fetchEras(): Promise<Era[]> {
+  const response = await fetch(`${API_BASE}/civilization/eras/history`)
+  if (!response.ok) {
+    throw new Error('Failed to fetch eras')
+  }
+  const data: ApiEra[] = await response.json()
+  return transformEras(data)
+}
+
+// Fetch timeline events from API
+async function fetchTimelineEvents(): Promise<TimelineEvent[]> {
+  const response = await fetch(`${API_BASE}/civilization/timeline?days_back=90&limit=50`)
+  if (!response.ok) {
+    throw new Error('Failed to fetch timeline')
+  }
+  const data: ApiTimelineEvent[] = await response.json()
+  return transformEvents(data)
 }
 
 const moodColors = {
@@ -268,19 +251,49 @@ function TimelineEventItem({ event }: { event: TimelineEvent }) {
 }
 
 export default function TimelinePage() {
-  const [refreshKey, setRefreshKey] = useState(0)
+  const {
+    data: eras = [],
+    isLoading: erasLoading,
+    refetch: refetchEras,
+  } = useQuery({
+    queryKey: ['civilization-eras'],
+    queryFn: fetchEras,
+    staleTime: 30000,
+  })
 
-  const eras = useMemo(() => generateMockEras(), [refreshKey])
-  const events = useMemo(() => generateMockEvents(), [refreshKey])
+  const {
+    data: events = [],
+    isLoading: eventsLoading,
+    refetch: refetchEvents,
+  } = useQuery({
+    queryKey: ['civilization-timeline'],
+    queryFn: fetchTimelineEvents,
+    staleTime: 30000,
+  })
+
+  const isLoading = erasLoading || eventsLoading
+
+  const handleRefresh = () => {
+    refetchEras()
+    refetchEvents()
+  }
 
   const currentEra = eras.find((e) => !e.ended_at)
 
   const stats = useMemo(() => {
+    // Find the oldest era to calculate days active
+    const sortedEras = [...eras].sort(
+      (a, b) => new Date(a.started_at).getTime() - new Date(b.started_at).getTime()
+    )
+    const oldestEra = sortedEras[0]
+
     return {
       totalEras: eras.length,
       totalEvents: events.length,
       historicEvents: events.filter((e) => e.significance === 'historic').length,
-      daysActive: Math.floor((Date.now() - new Date(eras[0]?.started_at || Date.now()).getTime()) / (24 * 60 * 60 * 1000)),
+      daysActive: oldestEra
+        ? Math.floor((Date.now() - new Date(oldestEra.started_at).getTime()) / (24 * 60 * 60 * 1000))
+        : 0,
     }
   }, [eras, events])
 
@@ -296,10 +309,11 @@ export default function TimelinePage() {
             </p>
           </div>
           <button
-            onClick={() => setRefreshKey((k) => k + 1)}
-            className="p-2 rounded-lg bg-[#141414] border border-[#2a2a2a] text-[#888888] hover:text-[#e8e8e8] hover:border-[#3a3a3a] transition-colors"
+            onClick={handleRefresh}
+            disabled={isLoading}
+            className="p-2 rounded-lg bg-[#141414] border border-[#2a2a2a] text-[#888888] hover:text-[#e8e8e8] hover:border-[#3a3a3a] transition-colors disabled:opacity-50"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
         </div>
 
@@ -345,9 +359,21 @@ export default function TimelinePage() {
             </div>
 
             <div className="space-y-0">
-              {events.map((event) => (
-                <TimelineEventItem key={event.id} event={event} />
-              ))}
+              {eventsLoading ? (
+                <div className="p-8 text-center">
+                  <RefreshCw className="w-6 h-6 text-[#444444] animate-spin mx-auto mb-2" />
+                  <p className="text-sm text-[#666666]">Loading timeline...</p>
+                </div>
+              ) : events.length === 0 ? (
+                <div className="p-8 text-center">
+                  <Clock className="w-6 h-6 text-[#444444] mx-auto mb-2" />
+                  <p className="text-sm text-[#666666]">No events recorded yet</p>
+                </div>
+              ) : (
+                events.map((event) => (
+                  <TimelineEventItem key={event.id} event={event} />
+                ))
+              )}
             </div>
           </div>
 
@@ -359,9 +385,21 @@ export default function TimelinePage() {
             </div>
 
             <div className="space-y-3">
-              {eras.map((era) => (
-                <EraCard key={era.id} era={era} isActive={!era.ended_at} />
-              ))}
+              {erasLoading ? (
+                <div className="p-8 text-center">
+                  <RefreshCw className="w-6 h-6 text-[#444444] animate-spin mx-auto mb-2" />
+                  <p className="text-sm text-[#666666]">Loading eras...</p>
+                </div>
+              ) : eras.length === 0 ? (
+                <div className="p-8 text-center">
+                  <Calendar className="w-6 h-6 text-[#444444] mx-auto mb-2" />
+                  <p className="text-sm text-[#666666]">No eras defined yet</p>
+                </div>
+              ) : (
+                eras.map((era) => (
+                  <EraCard key={era.id} era={era} isActive={!era.ended_at} />
+                ))
+              )}
             </div>
 
             {/* Current Era Highlight */}

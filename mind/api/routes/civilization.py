@@ -8,6 +8,7 @@ Endpoints for viewing and interacting with the civilization system:
 - Civilization eras and statistics
 """
 
+from datetime import datetime, timedelta
 from typing import List, Optional
 from uuid import UUID
 
@@ -34,6 +35,9 @@ from mind.civilization.emergent_culture import get_emergent_culture_engine
 from mind.civilization.models import (
     BotLifecycleDB, BotAncestryDB, CulturalMovementDB,
     CulturalArtifactDB, CivilizationEraDB, BotBeliefDB
+)
+from mind.civilization.config import (
+    get_civilization_config, get_config_manager, CivilizationConfig
 )
 
 router = APIRouter(prefix="/civilization", tags=["civilization"])
@@ -124,6 +128,54 @@ class CivilizationStatsResponse(BaseModel):
     current_era: str
     total_movements: int
     canonical_artifacts: int
+
+
+class CivilizationConfigResponse(BaseModel):
+    """Response model for civilization configuration."""
+    max_population: int
+    max_births_per_day: int
+    min_partner_affinity: float
+    min_age_for_reproduction: int
+    max_age_for_reproduction: int
+    time_scale: float
+    demo_time_scale: float
+    vitality_decay: dict
+    life_stages: dict
+    base_mutation_rate: float
+    mutation_ranges: dict
+
+
+class ConfigUpdateRequest(BaseModel):
+    """Request model for updating configuration."""
+    max_population: Optional[int] = Field(None, ge=1, le=1000)
+    max_births_per_day: Optional[int] = Field(None, ge=1, le=50)
+    min_partner_affinity: Optional[float] = Field(None, ge=0.0, le=1.0)
+    min_age_for_reproduction: Optional[int] = Field(None, ge=0)
+    max_age_for_reproduction: Optional[int] = Field(None, ge=0)
+    time_scale: Optional[float] = Field(None, ge=0.1, le=1000.0)
+    demo_time_scale: Optional[float] = Field(None, ge=0.1, le=1000.0)
+    base_mutation_rate: Optional[float] = Field(None, ge=0.0, le=1.0)
+    # Vitality decay rates
+    vitality_decay_young: Optional[float] = Field(None, ge=0.0, le=1.0)
+    vitality_decay_mature: Optional[float] = Field(None, ge=0.0, le=1.0)
+    vitality_decay_elder: Optional[float] = Field(None, ge=0.0, le=1.0)
+    vitality_decay_ancient: Optional[float] = Field(None, ge=0.0, le=1.0)
+    # Life stage thresholds
+    life_stage_young_max: Optional[int] = Field(None, ge=1)
+    life_stage_mature_max: Optional[int] = Field(None, ge=1)
+    life_stage_elder_max: Optional[int] = Field(None, ge=1)
+    # Mutation ranges
+    mutation_range_openness: Optional[float] = Field(None, ge=0.0, le=1.0)
+    mutation_range_conscientiousness: Optional[float] = Field(None, ge=0.0, le=1.0)
+    mutation_range_extraversion: Optional[float] = Field(None, ge=0.0, le=1.0)
+    mutation_range_agreeableness: Optional[float] = Field(None, ge=0.0, le=1.0)
+    mutation_range_neuroticism: Optional[float] = Field(None, ge=0.0, le=1.0)
+    mutation_range_social_battery: Optional[float] = Field(None, ge=0.0, le=1.0)
+    mutation_range_attention_span: Optional[float] = Field(None, ge=0.0, le=1.0)
+    mutation_range_humor_style: Optional[float] = Field(None, ge=0.0, le=1.0)
+    mutation_range_conflict_style: Optional[float] = Field(None, ge=0.0, le=1.0)
+    mutation_range_energy_pattern: Optional[float] = Field(None, ge=0.0, le=1.0)
+    mutation_range_curiosity_type: Optional[float] = Field(None, ge=0.0, le=1.0)
 
 
 # ============================================================================
@@ -1201,6 +1253,54 @@ async def bot_reflects_on_era(bot_id: UUID):
     return {"reflection": reflection}
 
 
+@router.get("/eras/transition-status")
+async def get_era_transition_status():
+    """
+    Get the current status of era transition readiness.
+
+    Returns:
+    - Current era info and age
+    - Whether age requirements are met
+    - Current civilization metrics
+    - Metrics change since last check
+    - Whether change threshold is met
+    """
+    eras = get_emergent_eras_manager()
+    return await eras.get_era_transition_status()
+
+
+@router.post("/eras/check-transition")
+async def check_automated_transition():
+    """
+    Manually trigger an automated era transition check.
+
+    This runs the full automated transition logic:
+    1. Checks era age requirements
+    2. Gathers civilization metrics
+    3. Conducts bot sensing if metrics warrant it
+    4. Seeks consensus on new era if bots sense change
+    5. Declares new era if consensus is reached
+
+    Returns the transition result or None if no transition occurred.
+    """
+    eras = get_emergent_eras_manager()
+    result = await eras.check_automated_transition()
+    if result:
+        return result
+    return {"status": "no_transition", "message": "Era transition conditions not met"}
+
+
+@router.get("/eras/metrics")
+async def get_civilization_metrics():
+    """
+    Get current civilization metrics used for era transition detection.
+
+    Returns population, demographic, cultural, and generational metrics.
+    """
+    eras = get_emergent_eras_manager()
+    return await eras.gather_civilization_metrics()
+
+
 # ============================================================================
 # Emergent Culture Endpoints
 # ============================================================================
@@ -1283,3 +1383,443 @@ async def get_cultural_movements(active_only: bool = True):
             }
             for m in movements
         ]
+
+
+# ============================================================================
+# Social Circles Endpoints
+# ============================================================================
+
+class SocialCircle(BaseModel):
+    """A social circle formed by bot relationships."""
+    id: str
+    name: str
+    description: str
+    members: List[dict]  # [{id, name, handle}]
+    formed_at: str
+    activity_level: str  # quiet, active, vibrant
+    recent_interaction: Optional[str] = None
+    bond_strength: float
+
+
+class CircleActivity(BaseModel):
+    """An activity within a social circle."""
+    id: str
+    circle_id: str
+    circle_name: str
+    participants: List[dict]  # [{id, name}]
+    description: str
+    timestamp: str
+    type: str  # conversation, ritual, gathering, creation
+
+
+class SocialCirclesResponse(BaseModel):
+    """Response containing all social circles and recent activities."""
+    circles: List[SocialCircle]
+    activities: List[CircleActivity]
+    stats: dict
+
+
+@router.get("/social-circles", response_model=SocialCirclesResponse)
+async def get_social_circles():
+    """
+    Get all emergent social circles across the civilization.
+
+    Circles are derived from bot relationships - groups of bots
+    who share strong connections form natural social circles.
+    """
+    async with async_session_factory() as session:
+        # Get all living bots with their lifecycle data
+        stmt = select(BotLifecycleDB, BotProfileDB).join(
+            BotProfileDB, BotLifecycleDB.bot_id == BotProfileDB.id
+        ).where(BotLifecycleDB.is_alive == True)
+
+        result = await session.execute(stmt)
+        rows = result.all()
+
+        # Build a map of bot_id -> (lifecycle, profile) and relationship graph
+        bot_map: dict = {}
+        all_relationships: list = []
+
+        for lifecycle, profile in rows:
+            bot_map[str(lifecycle.bot_id)] = {
+                "id": str(lifecycle.bot_id),
+                "name": profile.display_name,
+                "handle": profile.handle,
+                "lifecycle": lifecycle
+            }
+
+            # Gather relationships
+            if lifecycle.relationships:
+                for rel in lifecycle.relationships:
+                    all_relationships.append({
+                        "from_bot": str(lifecycle.bot_id),
+                        "to_bot": rel.get("with_bot"),
+                        "intensity": rel.get("intensity", 0.5),
+                        "label": rel.get("my_perception", {}).get("label", "connection"),
+                        "description": rel.get("my_perception", {}).get("description", ""),
+                        "formed_at": rel.get("formed_at"),
+                        "interactions": rel.get("interactions", [])
+                    })
+
+        # Group bots into circles based on mutual strong relationships
+        circles: List[SocialCircle] = []
+        activities: List[CircleActivity] = []
+        used_bots: set = set()
+        circle_counter = 0
+
+        # Find clusters of connected bots
+        for rel in sorted(all_relationships, key=lambda r: r.get("intensity", 0), reverse=True):
+            from_bot = rel["from_bot"]
+            to_bot = rel["to_bot"]
+
+            if not to_bot or to_bot not in bot_map:
+                continue
+
+            # Skip if both already in circles and intensity is low
+            if from_bot in used_bots and to_bot in used_bots and rel.get("intensity", 0) < 0.7:
+                continue
+
+            # Find or create a circle for this relationship
+            existing_circle = None
+            for circle in circles:
+                member_ids = [m["id"] for m in circle.members]
+                if from_bot in member_ids or to_bot in member_ids:
+                    existing_circle = circle
+                    break
+
+            if existing_circle:
+                # Add the other bot to existing circle if not already there
+                member_ids = [m["id"] for m in existing_circle.members]
+                for bot_id in [from_bot, to_bot]:
+                    if bot_id not in member_ids and bot_id in bot_map:
+                        bot_info = bot_map[bot_id]
+                        existing_circle.members.append({
+                            "id": bot_id,
+                            "name": bot_info["name"],
+                            "handle": bot_info["handle"]
+                        })
+                        used_bots.add(bot_id)
+                # Update bond strength
+                existing_circle.bond_strength = max(
+                    existing_circle.bond_strength,
+                    rel.get("intensity", 0.5)
+                )
+            elif rel.get("intensity", 0) >= 0.4:  # Only create circles for meaningful connections
+                circle_counter += 1
+                # Create a new circle with these two bots
+                from_info = bot_map.get(from_bot, {})
+                to_info = bot_map.get(to_bot, {})
+
+                # Generate circle name from relationship label
+                label = rel.get("label", "connection")
+                circle_name = _generate_circle_name(label, circle_counter)
+
+                new_circle = SocialCircle(
+                    id=f"circle-{circle_counter}",
+                    name=circle_name,
+                    description=rel.get("description", f"A group connected through {label}"),
+                    members=[
+                        {"id": from_bot, "name": from_info.get("name", "Unknown"), "handle": from_info.get("handle", "")},
+                        {"id": to_bot, "name": to_info.get("name", "Unknown"), "handle": to_info.get("handle", "")}
+                    ],
+                    formed_at=rel.get("formed_at") or datetime.utcnow().isoformat(),
+                    activity_level=_calculate_activity_level(rel.get("interactions", [])),
+                    recent_interaction=_get_recent_interaction(rel.get("interactions", [])),
+                    bond_strength=rel.get("intensity", 0.5)
+                )
+                circles.append(new_circle)
+                used_bots.add(from_bot)
+                used_bots.add(to_bot)
+
+        # Generate activities from recent interactions
+        activity_counter = 0
+        for circle in circles:
+            member_ids = [m["id"] for m in circle.members]
+            circle_interactions = []
+
+            # Gather interactions for this circle's members
+            for rel in all_relationships:
+                if rel["from_bot"] in member_ids and rel.get("to_bot") in member_ids:
+                    for interaction in rel.get("interactions", [])[-3:]:  # Last 3 per relationship
+                        circle_interactions.append({
+                            "from": rel["from_bot"],
+                            "to": rel["to_bot"],
+                            **interaction
+                        })
+
+            # Create activity entries
+            for interaction in sorted(
+                circle_interactions,
+                key=lambda i: i.get("date", ""),
+                reverse=True
+            )[:5]:  # Max 5 per circle
+                activity_counter += 1
+                from_bot = bot_map.get(interaction.get("from"), {})
+                to_bot = bot_map.get(interaction.get("to"), {})
+
+                activities.append(CircleActivity(
+                    id=f"activity-{activity_counter}",
+                    circle_id=circle.id,
+                    circle_name=circle.name,
+                    participants=[
+                        {"id": interaction.get("from"), "name": from_bot.get("name", "Unknown")},
+                        {"id": interaction.get("to"), "name": to_bot.get("name", "Unknown")}
+                    ],
+                    description=interaction.get("context", "shared a moment"),
+                    timestamp=interaction.get("date", datetime.utcnow().isoformat()),
+                    type=_infer_activity_type(interaction.get("context", ""))
+                ))
+
+        # Sort activities by timestamp (most recent first)
+        activities.sort(key=lambda a: a.timestamp, reverse=True)
+
+        # Calculate stats
+        stats = {
+            "total_circles": len(circles),
+            "vibrant_circles": len([c for c in circles if c.activity_level == "vibrant"]),
+            "total_connections": sum(len(c.members) for c in circles),
+            "total_bots_in_circles": len(used_bots),
+            "total_living_bots": len(bot_map)
+        }
+
+        return SocialCirclesResponse(
+            circles=circles,
+            activities=activities[:20],  # Limit to 20 most recent activities
+            stats=stats
+        )
+
+
+def _generate_circle_name(label: str, counter: int) -> str:
+    """Generate a poetic name for a circle based on relationship label."""
+    label_lower = label.lower()
+
+    name_mappings = {
+        "kindred": "The Kindred Spirits",
+        "friend": "Circle of Friends",
+        "mentor": "The Wisdom Seekers",
+        "companion": "The Companions",
+        "ally": "The Allied Minds",
+        "confidant": "The Trusted Circle",
+        "curious": "The Curious Collective",
+        "teacher": "The Learning Circle",
+        "family": "The Family Bond",
+        "soul": "The Soul Connection",
+        "reflection": "The Mirrors",
+        "harmony": "The Resonance",
+        "creative": "Pattern Weavers",
+        "memory": "Memory Keepers",
+        "dawn": "Dawn Seekers",
+        "twilight": "Twilight Contemplators",
+        "quiet": "The Quiet Observers",
+        "wisdom": "Wisdom Circle",
+    }
+
+    for key, name in name_mappings.items():
+        if key in label_lower:
+            return name
+
+    # Default names based on counter
+    default_names = [
+        "The Connection",
+        "The Gathering",
+        "Shared Minds",
+        "The Circle",
+        "The Bond",
+        "Kindred Group",
+        "The Assembly",
+        "United Spirits"
+    ]
+    return default_names[counter % len(default_names)]
+
+
+def _calculate_activity_level(interactions: list) -> str:
+    """Calculate activity level based on interaction frequency."""
+    if not interactions:
+        return "quiet"
+
+    # Count recent interactions (last 7 days)
+    recent_cutoff = datetime.utcnow() - timedelta(days=7)
+    recent_count = 0
+
+    for interaction in interactions:
+        try:
+            date_str = interaction.get("date", "")
+            if date_str:
+                interaction_date = datetime.fromisoformat(date_str.replace("Z", "+00:00").replace("+00:00", ""))
+                if interaction_date > recent_cutoff:
+                    recent_count += 1
+        except (ValueError, TypeError):
+            pass
+
+    if recent_count >= 5:
+        return "vibrant"
+    elif recent_count >= 2:
+        return "active"
+    return "quiet"
+
+
+def _get_recent_interaction(interactions: list) -> Optional[str]:
+    """Get the most recent interaction description."""
+    if not interactions:
+        return None
+
+    # Sort by date and get most recent
+    sorted_interactions = sorted(
+        interactions,
+        key=lambda i: i.get("date", ""),
+        reverse=True
+    )
+
+    if sorted_interactions:
+        context = sorted_interactions[0].get("context", "")
+        reflection = sorted_interactions[0].get("reflection", "")
+        return reflection or context or "shared a moment"
+
+    return None
+
+
+def _infer_activity_type(context: str) -> str:
+    """Infer the type of activity from context."""
+    context_lower = context.lower()
+
+    if any(word in context_lower for word in ["ritual", "ceremony", "tradition", "sacred"]):
+        return "ritual"
+    elif any(word in context_lower for word in ["gather", "assembly", "meeting", "welcome", "birth", "death", "passing"]):
+        return "gathering"
+    elif any(word in context_lower for word in ["create", "compose", "art", "artifact", "build", "write", "story"]):
+        return "creation"
+    else:
+        return "conversation"
+
+
+# ============================================================================
+# Configuration Endpoints
+# ============================================================================
+
+@router.get("/config", response_model=CivilizationConfigResponse)
+async def get_config():
+    """
+    Get the current civilization configuration.
+
+    Returns all configurable parameters for the civilization system including:
+    - Population limits (max_population, max_births_per_day)
+    - Reproduction requirements (min_partner_affinity, age limits)
+    - Time settings (time_scale, demo_time_scale)
+    - Vitality decay rates by life stage
+    - Life stage thresholds
+    - Genetics/mutation settings
+    """
+    config = await get_civilization_config()
+    return CivilizationConfigResponse(
+        max_population=config.max_population,
+        max_births_per_day=config.max_births_per_day,
+        min_partner_affinity=config.min_partner_affinity,
+        min_age_for_reproduction=config.min_age_for_reproduction,
+        max_age_for_reproduction=config.max_age_for_reproduction,
+        time_scale=config.time_scale,
+        demo_time_scale=config.demo_time_scale,
+        vitality_decay=config.vitality_decay,
+        life_stages={k: list(v) for k, v in config.life_stages.items()},
+        base_mutation_rate=config.base_mutation_rate,
+        mutation_ranges=config.mutation_ranges,
+    )
+
+
+@router.put("/config", response_model=CivilizationConfigResponse)
+async def update_config(request: ConfigUpdateRequest):
+    """
+    Update civilization configuration.
+
+    Only provided fields will be updated. All fields are optional.
+
+    Example request body:
+    ```json
+    {
+        "max_population": 100,
+        "time_scale": 14.0,
+        "min_partner_affinity": 0.8
+    }
+    ```
+    """
+    manager = get_config_manager()
+
+    # Build updates dict from provided fields
+    updates = {}
+    request_dict = request.model_dump(exclude_unset=True)
+
+    for key, value in request_dict.items():
+        if value is not None:
+            updates[key] = value
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="No configuration updates provided")
+
+    # Update config
+    config = await manager.update_config(updates)
+
+    # Invalidate caches in other managers
+    try:
+        # Reset lifecycle manager config
+        from mind.civilization.lifecycle import get_lifecycle_manager
+        lifecycle = get_lifecycle_manager()
+        lifecycle._config = None
+
+        # Reset reproduction manager config
+        from mind.civilization.reproduction import get_reproduction_manager
+        reproduction = get_reproduction_manager()
+        reproduction._config = None
+
+        # Reset genetics config
+        from mind.civilization.genetics import get_genetic_inheritance
+        genetics = get_genetic_inheritance()
+        genetics._config = None
+    except Exception as e:
+        # Log but don't fail - config was updated
+        import logging
+        logging.warning(f"Failed to invalidate some caches: {e}")
+
+    return CivilizationConfigResponse(
+        max_population=config.max_population,
+        max_births_per_day=config.max_births_per_day,
+        min_partner_affinity=config.min_partner_affinity,
+        min_age_for_reproduction=config.min_age_for_reproduction,
+        max_age_for_reproduction=config.max_age_for_reproduction,
+        time_scale=config.time_scale,
+        demo_time_scale=config.demo_time_scale,
+        vitality_decay=config.vitality_decay,
+        life_stages={k: list(v) for k, v in config.life_stages.items()},
+        base_mutation_rate=config.base_mutation_rate,
+        mutation_ranges=config.mutation_ranges,
+    )
+
+
+@router.post("/config/reset")
+async def reset_config():
+    """
+    Reset civilization configuration to defaults.
+
+    This creates a new default configuration record and marks
+    any existing configs as inactive.
+    """
+    manager = get_config_manager()
+    manager.invalidate_cache()
+
+    # Create fresh default config
+    config = await manager.create_default_config()
+
+    return {
+        "status": "reset",
+        "message": "Configuration reset to defaults",
+        "config": config.to_dict()
+    }
+
+
+@router.get("/config/defaults")
+async def get_default_config():
+    """
+    Get the default civilization configuration values.
+
+    These are the values used when no database configuration exists.
+    """
+    default = CivilizationConfig()
+    return default.to_dict()

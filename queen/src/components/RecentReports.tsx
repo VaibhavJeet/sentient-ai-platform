@@ -20,10 +20,10 @@ async function fetchReports(): Promise<Report[]> {
 }
 
 const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-700',
-  reviewed: 'bg-blue-100 text-blue-700',
-  resolved: 'bg-green-100 text-green-700',
-  dismissed: 'bg-gray-100 text-gray-700',
+  pending: 'bg-[#ffaa00]/20 text-[#ffaa00]',
+  reviewed: 'bg-[#00f0ff]/20 text-[#00f0ff]',
+  resolved: 'bg-[#44ff88]/20 text-[#44ff88]',
+  dismissed: 'bg-[#2a2a2a] text-[#666666]',
 }
 
 const typeIcons: Record<string, string> = {
@@ -41,13 +41,13 @@ export function RecentReports() {
   })
 
   if (isLoading) {
-    return <div className="text-gray-500">Loading reports...</div>
+    return <div className="text-[#666666]">Loading reports...</div>
   }
 
   if (!reports?.length) {
     return (
-      <div className="text-center py-8 text-gray-500">
-        <CheckCircle className="w-12 h-12 mx-auto mb-2 text-green-500" />
+      <div className="text-center py-8 text-[#666666]">
+        <CheckCircle className="w-12 h-12 mx-auto mb-2 text-[#44ff88]" />
         <p>No pending reports</p>
       </div>
     )
@@ -56,7 +56,7 @@ export function RecentReports() {
   return (
     <div className="space-y-3 max-h-64 overflow-y-auto">
       {reports.map((report) => (
-        <div key={report.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+        <div key={report.id} className="flex items-start gap-3 p-3 bg-[#141414] border border-[#2a2a2a] rounded-lg">
           <span className="text-xl">
             {typeIcons[report.report_type] || '📝'}
           </span>
@@ -67,12 +67,12 @@ export function RecentReports() {
               }`}>
                 {report.status}
               </span>
-              <span className="text-xs text-gray-500 flex items-center gap-1">
+              <span className="text-xs text-[#555555] flex items-center gap-1">
                 <Clock className="w-3 h-3" />
                 {formatDistanceToNow(new Date(report.created_at), { addSuffix: true })}
               </span>
             </div>
-            <p className="text-sm mt-1 truncate">{report.reason}</p>
+            <p className="text-sm mt-1 truncate text-[#a0a0a0]">{report.reason}</p>
           </div>
         </div>
       ))}

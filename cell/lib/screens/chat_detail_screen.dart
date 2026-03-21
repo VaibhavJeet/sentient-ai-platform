@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:timeago/timeago.dart' as timeago;
-import '../providers/app_state.dart';
+import '../providers/chat_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/design_system.dart';
+import '../widgets/shimmer_skeleton.dart';
 import '../models/models.dart';
 
 class ChatDetailScreen extends StatefulWidget {
@@ -43,11 +44,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   Future<void> _loadBotAndMessages() async {
-    final appState = context.read<AppState>();
+    final chatProvider = context.read<ChatProvider>();
     try {
-      final bots = await appState.loadBots();
+      final bots = await chatProvider.loadBots();
       final bot = bots.firstWhere((b) => b.id == widget.botId);
-      await appState.selectBot(bot);
+      await chatProvider.selectBot(bot);
       setState(() {
         _botProfile = bot;
         _isLoading = false;
@@ -73,8 +74,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   void _sendMessage() {
     if (_messageController.text.trim().isEmpty) return;
 
-    final appState = context.read<AppState>();
-    appState.sendDirectMessage(_messageController.text.trim());
+    final chatProvider = context.read<ChatProvider>();
+    chatProvider.sendDirectMessage(_messageController.text.trim());
     _messageController.clear();
     _scrollToBottom();
     HapticFeedback.lightImpact();
@@ -90,11 +91,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             _buildHeader(),
             Expanded(
               child: _isLoading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation(AppTheme.semanticBlue),
-                      ),
+                  ? ListView.builder(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      itemCount: 6,
+                      itemBuilder: (context, index) => ShimmerChatMessage(isRight: index % 2 == 0),
                     )
                   : _buildMessageList(),
             ),
@@ -245,21 +245,21 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   Widget _buildMessageList() {
-    return Consumer<AppState>(
-      builder: (context, appState, child) {
-        if (appState.directMessages.isEmpty) {
+    return Consumer<ChatProvider>(
+      builder: (context, chatProvider, child) {
+        if (chatProvider.directMessages.isEmpty) {
           return _buildEmptyChat();
         }
 
         return ListView.builder(
           controller: _scrollController,
           padding: const EdgeInsets.all(16),
-          itemCount: appState.directMessages.length,
+          itemCount: chatProvider.directMessages.length,
           itemBuilder: (context, index) {
-            final message = appState.directMessages[index];
+            final message = chatProvider.directMessages[index];
             final showTime = index == 0 ||
                 message.createdAt.difference(
-                  appState.directMessages[index - 1].createdAt,
+                  chatProvider.directMessages[index - 1].createdAt,
                 ).inMinutes > 5;
 
             return _MessageBubble(
@@ -329,9 +329,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   Widget _buildTypingIndicator() {
-    return Consumer<AppState>(
-      builder: (context, appState, child) {
-        if (!appState.isTyping) return const SizedBox.shrink();
+    return Consumer<ChatProvider>(
+      builder: (context, chatProvider, child) {
+        if (!chatProvider.isTyping) return const SizedBox.shrink();
 
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

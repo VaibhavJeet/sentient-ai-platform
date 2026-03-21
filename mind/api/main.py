@@ -50,7 +50,8 @@ from mind.api.routes import (
     notifications_router, moderation_router, hashtags_router,
     media_router, analytics_router, analytics_admin_router,
     analytics_dashboard_router, stories_router, search_router,
-    admin_router, blocking_router, scaling_router, civilization_router
+    admin_router, blocking_router, scaling_router, civilization_router,
+    settings_router
 )
 from mind.api.routes.evolution import router as evolution_router
 from mind.api.routes.metrics import router as metrics_router
@@ -364,6 +365,7 @@ app.include_router(admin_router)
 app.include_router(blocking_router)
 app.include_router(scaling_router)
 app.include_router(civilization_router)
+app.include_router(settings_router)
 
 
 # ============================================================================

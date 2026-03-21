@@ -39,8 +39,8 @@ INHERITABLE_TRAITS = [
     "curiosity_type",
 ]
 
-# How much traits can mutate from inherited baseline
-MUTATION_RANGE = {
+# Default mutation ranges (used if config not available)
+DEFAULT_MUTATION_RANGE = {
     # Numeric traits: max deviation from inherited value
     "openness": 0.15,
     "conscientiousness": 0.15,
@@ -66,14 +66,42 @@ class GeneticInheritance:
     natural variation.
     """
 
-    def __init__(self, mutation_rate: float = 0.1):
+    def __init__(self, mutation_rate: Optional[float] = None):
         """
         Initialize genetics system.
 
         Args:
-            mutation_rate: Base probability of trait mutation (0-1)
+            mutation_rate: Base probability of trait mutation (0-1).
+                          If None, loaded from config.
         """
-        self.mutation_rate = mutation_rate
+        self._mutation_rate_override = mutation_rate
+        self._config = None
+        self._mutation_ranges = None
+
+    async def _load_config(self):
+        """Load configuration from database."""
+        try:
+            from mind.civilization.config import get_civilization_config
+            self._config = await get_civilization_config()
+            self._mutation_ranges = self._config.mutation_ranges
+        except Exception as e:
+            logger.warning(f"[GENETICS] Failed to load config: {e}, using defaults")
+            self._mutation_ranges = DEFAULT_MUTATION_RANGE
+
+    @property
+    def mutation_rate(self) -> float:
+        """Get the base mutation rate."""
+        if self._mutation_rate_override is not None:
+            return self._mutation_rate_override
+        if self._config is not None:
+            return self._config.base_mutation_rate
+        return 0.1  # Default fallback
+
+    def get_mutation_range(self, trait: str) -> float:
+        """Get mutation range for a specific trait."""
+        if self._mutation_ranges is not None:
+            return self._mutation_ranges.get(trait, 0.1)
+        return DEFAULT_MUTATION_RANGE.get(trait, 0.1)
 
     def inherit_traits(
         self,
@@ -188,7 +216,7 @@ class GeneticInheritance:
         if value is None:
             return None, 0
 
-        mutation_range = MUTATION_RANGE.get(trait, 0.1)
+        mutation_range = self.get_mutation_range(trait)
 
         # Check if mutation occurs
         if random.random() > self.mutation_rate:
@@ -480,9 +508,16 @@ class GeneticInheritance:
 _genetic_inheritance: Optional[GeneticInheritance] = None
 
 
-def get_genetic_inheritance(mutation_rate: float = 0.1) -> GeneticInheritance:
+def get_genetic_inheritance(mutation_rate: Optional[float] = None) -> GeneticInheritance:
     """Get or create the genetic inheritance instance."""
     global _genetic_inheritance
     if _genetic_inheritance is None:
         _genetic_inheritance = GeneticInheritance(mutation_rate=mutation_rate)
     return _genetic_inheritance
+
+
+async def initialize_genetics() -> GeneticInheritance:
+    """Initialize genetics system with config from database."""
+    genetics = get_genetic_inheritance()
+    await genetics._load_config()
+    return genetics

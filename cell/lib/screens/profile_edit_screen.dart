@@ -61,6 +61,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
   @override
   void dispose() {
+    _nameController.removeListener(_onDataChanged);
+    _bioController.removeListener(_onDataChanged);
     _nameController.dispose();
     _bioController.dispose();
     super.dispose();

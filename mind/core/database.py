@@ -212,6 +212,8 @@ class CommunityDB(Base):
     real_user_count: Mapped[int] = mapped_column(Integer, default=0)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_activity_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
 
     content_guidelines: Mapped[str] = mapped_column(Text, default="")
     banned_topics: Mapped[List[str]] = mapped_column(JSON, default=list)

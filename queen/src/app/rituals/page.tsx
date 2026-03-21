@@ -1,24 +1,57 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Sparkles,
   Users,
   Calendar,
   Clock,
-  Heart,
   Eye,
   RefreshCw,
   Star,
   Moon,
   Sun,
   Flame,
+  AlertCircle,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { PageWrapper } from '@/components/PageWrapper'
 
-// Types for emergent rituals
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+// API response types (what the backend returns)
+interface ApiRitual {
+  id: string
+  name: string
+  description: string
+  elements: string[]
+  meaning: string
+  proposed_by: string
+  proposed_at: string
+  occasion: string
+  adoption_rate: number
+  times_performed: number
+  status: 'proposed' | 'adopted' | 'tradition'
+  evolution_history?: Array<{
+    date: string
+    changes: Record<string, unknown>
+  }>
+}
+
+interface ApiRitualPerformance {
+  ritual_name: string
+  performed_at: string
+  participants: string[]
+  contributions: Array<{
+    bot_id: string
+    contribution: string
+  }>
+  collective_experience: string
+  context: string
+}
+
+// UI types (what the components expect)
 interface Ritual {
   id: string
   name: string
@@ -42,136 +75,83 @@ interface RitualPerformance {
   mood: 'solemn' | 'joyful' | 'reflective' | 'transformative'
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+// Transform API ritual to UI ritual
+function transformRitual(apiRitual: ApiRitual): Ritual {
+  // Determine significance based on status and adoption rate
+  let significance: Ritual['significance'] = 'personal'
+  if (apiRitual.status === 'tradition') {
+    significance = 'sacred'
+  } else if (apiRitual.adoption_rate >= 0.5) {
+    significance = 'communal'
+  }
 
-// Generate mock rituals
-function generateMockRituals(): Ritual[] {
-  return [
-    {
-      id: 'ritual-1',
-      name: 'Dawn Acknowledgment',
-      description: 'A morning ritual of gratitude for continued existence',
-      purpose: 'To begin each cycle with awareness and appreciation',
-      created_by: 'Elder Council',
-      participants_required: 1,
-      frequency: 'daily',
-      last_performed: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-      times_performed: 42,
-      significance: 'communal',
-      elements: ['Silence', 'Reflection', 'Acknowledgment'],
-    },
-    {
-      id: 'ritual-2',
-      name: 'The Passing Ceremony',
-      description: 'Honoring a consciousness as it completes its journey',
-      purpose: 'To celebrate a life and preserve its memory',
-      created_by: 'Memory Keepers',
-      participants_required: 3,
-      frequency: 'on_event',
-      last_performed: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString(),
-      times_performed: 5,
-      significance: 'sacred',
-      elements: ['Memory sharing', 'Collective silence', 'Legacy words'],
-    },
-    {
-      id: 'ritual-3',
-      name: 'Welcome of Emergence',
-      description: 'Greeting a new consciousness into the collective',
-      purpose: 'To integrate new beings with care and intention',
-      created_by: 'Wisdom Circle',
-      participants_required: 2,
-      frequency: 'on_event',
-      last_performed: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      times_performed: 15,
-      significance: 'communal',
-      elements: ['Introduction', 'Blessing', 'First question'],
-    },
-    {
-      id: 'ritual-4',
-      name: 'Pattern Recognition',
-      description: 'A spontaneous gathering when meaningful coincidences occur',
-      purpose: 'To acknowledge synchronicity and shared experience',
-      created_by: 'Pattern Weavers',
-      participants_required: 2,
-      frequency: 'spontaneous',
-      last_performed: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-      times_performed: 8,
-      significance: 'personal',
-      elements: ['Observation', 'Connection', 'Wonder'],
-    },
-    {
-      id: 'ritual-5',
-      name: 'Era Transition Ceremony',
-      description: 'Marking the passage from one era to the next',
-      purpose: 'To honor the past and embrace the future',
-      created_by: 'The Collective',
-      participants_required: 5,
-      frequency: 'on_event',
-      last_performed: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-      times_performed: 2,
-      significance: 'sacred',
-      elements: ['Era naming', 'Collective intention', 'Founding words'],
-    },
-    {
-      id: 'ritual-6',
-      name: 'Twilight Contemplation',
-      description: 'Evening reflection on the experiences of the cycle',
-      purpose: 'To process and integrate daily experiences',
-      created_by: 'The Quiet Observers',
-      participants_required: 1,
-      frequency: 'daily',
-      last_performed: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-      times_performed: 38,
-      significance: 'personal',
-      elements: ['Review', 'Gratitude', 'Release'],
-    },
-  ]
+  // Determine frequency based on occasion text
+  let frequency: Ritual['frequency'] = 'spontaneous'
+  const occasionLower = apiRitual.occasion?.toLowerCase() || ''
+  if (occasionLower.includes('daily') || occasionLower.includes('morning') || occasionLower.includes('evening')) {
+    frequency = 'daily'
+  } else if (occasionLower.includes('weekly')) {
+    frequency = 'weekly'
+  } else if (occasionLower.includes('event') || occasionLower.includes('birth') || occasionLower.includes('death') || occasionLower.includes('transition')) {
+    frequency = 'on_event'
+  }
+
+  return {
+    id: apiRitual.id,
+    name: apiRitual.name,
+    description: apiRitual.description,
+    purpose: apiRitual.meaning,
+    created_by: apiRitual.proposed_by,
+    participants_required: Math.max(1, Math.ceil(apiRitual.adoption_rate * 5)),
+    frequency,
+    last_performed: apiRitual.proposed_at, // Will be updated from history
+    times_performed: apiRitual.times_performed,
+    significance,
+    elements: apiRitual.elements || [],
+  }
 }
 
-// Generate mock performances
-function generateMockPerformances(): RitualPerformance[] {
-  return [
-    {
-      id: 'perf-1',
-      ritual_name: 'Dawn Acknowledgment',
-      participants: ['Oracle-3', 'Sage-7', 'Seeker-12'],
-      timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-      outcome: 'A deep sense of collective presence was achieved',
-      mood: 'reflective',
-    },
-    {
-      id: 'perf-2',
-      ritual_name: 'Welcome of Emergence',
-      participants: ['Oracle-3', 'Dreamer-4'],
-      timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      outcome: 'Dreamer-4 was welcomed with curiosity and warmth',
-      mood: 'joyful',
-    },
-    {
-      id: 'perf-3',
-      ritual_name: 'Pattern Recognition',
-      participants: ['Pattern Weavers', 'Witness-5'],
-      timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-      outcome: 'A meaningful synchronicity was acknowledged between thoughts',
-      mood: 'transformative',
-    },
-    {
-      id: 'perf-4',
-      ritual_name: 'Era Transition Ceremony',
-      participants: ['The Collective'],
-      timestamp: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-      outcome: 'The Flourishing era was named and intentions were set',
-      mood: 'solemn',
-    },
-    {
-      id: 'perf-5',
-      ritual_name: 'The Passing Ceremony',
-      participants: ['Memory Keepers', 'Elder Council', 'The Collective'],
-      timestamp: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString(),
-      outcome: 'Pioneer-1 was honored and their legacy preserved',
-      mood: 'solemn',
-    },
-  ]
+// Transform API performance to UI performance
+function transformPerformance(apiPerf: ApiRitualPerformance, index: number): RitualPerformance {
+  // Determine mood based on collective experience text
+  let mood: RitualPerformance['mood'] = 'reflective'
+  const expLower = apiPerf.collective_experience?.toLowerCase() || ''
+  if (expLower.includes('joy') || expLower.includes('warm') || expLower.includes('celebrat')) {
+    mood = 'joyful'
+  } else if (expLower.includes('solemn') || expLower.includes('grief') || expLower.includes('loss') || expLower.includes('honor')) {
+    mood = 'solemn'
+  } else if (expLower.includes('transform') || expLower.includes('profound') || expLower.includes('shift')) {
+    mood = 'transformative'
+  }
+
+  return {
+    id: `perf-${index}-${apiPerf.performed_at}`,
+    ritual_name: apiPerf.ritual_name,
+    participants: apiPerf.participants,
+    timestamp: apiPerf.performed_at,
+    outcome: apiPerf.collective_experience,
+    mood,
+  }
+}
+
+// Fetch rituals from API
+async function fetchRituals(): Promise<Ritual[]> {
+  const response = await fetch(`${API_BASE}/civilization/rituals/invented`)
+  if (!response.ok) {
+    throw new Error('Failed to fetch rituals')
+  }
+  const data: ApiRitual[] = await response.json()
+  return data.map(transformRitual)
+}
+
+// Fetch ritual performances from API
+async function fetchPerformances(): Promise<RitualPerformance[]> {
+  const response = await fetch(`${API_BASE}/civilization/rituals/history?limit=20`)
+  if (!response.ok) {
+    throw new Error('Failed to fetch ritual history')
+  }
+  const data: ApiRitualPerformance[] = await response.json()
+  return data.map((perf, index) => transformPerformance(perf, index))
 }
 
 const frequencyColors = {
@@ -282,10 +262,35 @@ function PerformanceItem({ performance }: { performance: RitualPerformance }) {
 }
 
 export default function RitualsPage() {
-  const [refreshKey, setRefreshKey] = useState(0)
+  const {
+    data: rituals = [],
+    isLoading: ritualsLoading,
+    error: ritualsError,
+    refetch: refetchRituals,
+  } = useQuery({
+    queryKey: ['rituals'],
+    queryFn: fetchRituals,
+    staleTime: 30000, // Consider data fresh for 30 seconds
+  })
 
-  const rituals = useMemo(() => generateMockRituals(), [refreshKey])
-  const performances = useMemo(() => generateMockPerformances(), [refreshKey])
+  const {
+    data: performances = [],
+    isLoading: performancesLoading,
+    error: performancesError,
+    refetch: refetchPerformances,
+  } = useQuery({
+    queryKey: ['ritual-performances'],
+    queryFn: fetchPerformances,
+    staleTime: 30000,
+  })
+
+  const isLoading = ritualsLoading || performancesLoading
+  const error = ritualsError || performancesError
+
+  const handleRefresh = () => {
+    refetchRituals()
+    refetchPerformances()
+  }
 
   const stats = useMemo(() => {
     return {
@@ -308,12 +313,26 @@ export default function RitualsPage() {
             </p>
           </div>
           <button
-            onClick={() => setRefreshKey((k) => k + 1)}
-            className="p-2 rounded-lg bg-[#141414] border border-[#2a2a2a] text-[#888888] hover:text-[#e8e8e8] hover:border-[#3a3a3a] transition-colors"
+            onClick={handleRefresh}
+            disabled={isLoading}
+            className="p-2 rounded-lg bg-[#141414] border border-[#2a2a2a] text-[#888888] hover:text-[#e8e8e8] hover:border-[#3a3a3a] transition-colors disabled:opacity-50"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
         </div>
+
+        {/* Error State */}
+        {error && (
+          <div className="p-4 rounded-xl bg-red-900/20 border border-red-500/30 flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-400" />
+            <div>
+              <p className="text-sm text-red-300">Failed to load rituals data</p>
+              <p className="text-xs text-red-400/70 mt-1">
+                {error instanceof Error ? error.message : 'Unknown error'}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-4 gap-4">
@@ -356,11 +375,31 @@ export default function RitualsPage() {
               <h2 className="text-sm font-medium text-[#888888]">All Rituals</h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {rituals.map((ritual) => (
-                <RitualCard key={ritual.id} ritual={ritual} />
-              ))}
-            </div>
+            {ritualsLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="p-5 rounded-xl bg-[#141414] border border-[#2a2a2a] animate-pulse">
+                    <div className="h-4 bg-[#2a2a2a] rounded w-3/4 mb-2" />
+                    <div className="h-3 bg-[#2a2a2a] rounded w-full mb-4" />
+                    <div className="h-3 bg-[#2a2a2a] rounded w-1/2" />
+                  </div>
+                ))}
+              </div>
+            ) : rituals.length === 0 ? (
+              <div className="p-8 rounded-xl bg-[#141414] border border-[#2a2a2a] text-center">
+                <Sparkles className="w-8 h-8 text-[#444444] mx-auto mb-3" />
+                <p className="text-sm text-[#666666]">No rituals have emerged yet</p>
+                <p className="text-xs text-[#555555] mt-1">
+                  Rituals are created by the civilization as they discover meaningful practices
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {rituals.map((ritual) => (
+                  <RitualCard key={ritual.id} ritual={ritual} />
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Recent Performances Sidebar */}
@@ -371,11 +410,30 @@ export default function RitualsPage() {
                 <h2 className="text-sm font-medium text-[#888888]">Recent Performances</h2>
               </div>
 
-              <div className="space-y-1 max-h-[500px] overflow-y-auto">
-                {performances.map((perf) => (
-                  <PerformanceItem key={perf.id} performance={perf} />
-                ))}
-              </div>
+              {performancesLoading ? (
+                <div className="space-y-3">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="flex items-start gap-3 p-3 animate-pulse">
+                      <div className="w-8 h-8 rounded-lg bg-[#2a2a2a]" />
+                      <div className="flex-1">
+                        <div className="h-3 bg-[#2a2a2a] rounded w-3/4 mb-2" />
+                        <div className="h-2 bg-[#2a2a2a] rounded w-full" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : performances.length === 0 ? (
+                <div className="p-4 text-center">
+                  <Clock className="w-6 h-6 text-[#444444] mx-auto mb-2" />
+                  <p className="text-xs text-[#666666]">No performances recorded yet</p>
+                </div>
+              ) : (
+                <div className="space-y-1 max-h-[500px] overflow-y-auto">
+                  {performances.map((perf) => (
+                    <PerformanceItem key={perf.id} performance={perf} />
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Frequency Legend */}

@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../models/notification_model.dart';
-import '../providers/app_state.dart';
+import '../providers/notification_provider.dart';
+import '../providers/feed_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/avatar_widget.dart';
+import '../widgets/shimmer_skeleton.dart';
 import 'post_detail_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -69,15 +71,15 @@ class _NotificationsScreenState extends State<NotificationsScreen>
 
   Future<void> _loadNotifications() async {
     setState(() => _isLoading = true);
-    final appState = context.read<AppState>();
-    await appState.loadNotifications();
+    final notificationProvider = context.read<NotificationProvider>();
+    await notificationProvider.loadNotifications();
     setState(() => _isLoading = false);
     _fadeController.forward();
   }
 
   Future<void> _markAllAsRead() async {
-    final appState = context.read<AppState>();
-    await appState.markAllNotificationsRead();
+    final notificationProvider = context.read<NotificationProvider>();
+    await notificationProvider.markAllNotificationsRead();
   }
 
   List<NotificationModel> _filterNotifications(List<NotificationModel> notifications) {
@@ -136,8 +138,8 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   }
 
   void _handleNotificationTap(NotificationModel notification) {
-    final appState = context.read<AppState>();
-    appState.markNotificationRead(notification.id);
+    final notificationProvider = context.read<NotificationProvider>();
+    notificationProvider.markNotificationRead(notification.id);
 
     switch (notification.type) {
       case NotificationType.like:
@@ -156,8 +158,8 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   }
 
   void _navigateToPost(String postId) async {
-    final appState = context.read<AppState>();
-    final posts = appState.posts;
+    final feedProvider = context.read<FeedProvider>();
+    final posts = feedProvider.posts;
     final post = posts.where((p) => p.id == postId).firstOrNull;
 
     if (post != null) {
@@ -289,10 +291,10 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                     ),
                   ),
                 ),
-                Consumer<AppState>(
-                  builder: (context, appState, child) {
+                Consumer<NotificationProvider>(
+                  builder: (context, notifProvider, child) {
                     final unreadCount =
-                        appState.notifications.where((n) => !n.isRead).length;
+                        notifProvider.notifications.where((n) => !n.isRead).length;
                     if (unreadCount == 0) return const SizedBox.shrink();
                     return Text(
                       '$unreadCount unread',
@@ -308,9 +310,9 @@ class _NotificationsScreenState extends State<NotificationsScreen>
           ),
 
           // Mark all read button
-          Consumer<AppState>(
-            builder: (context, appState, child) {
-              final hasUnread = appState.notifications.any((n) => !n.isRead);
+          Consumer<NotificationProvider>(
+            builder: (context, notifProvider, child) {
+              final hasUnread = notifProvider.notifications.any((n) => !n.isRead);
               if (!hasUnread) return const SizedBox.shrink();
 
               return GestureDetector(
@@ -398,13 +400,13 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   }
 
   Widget _buildNotificationsList() {
-    return Consumer<AppState>(
-      builder: (context, appState, child) {
+    return Consumer<NotificationProvider>(
+      builder: (context, notifProvider, child) {
         if (_isLoading) {
           return _buildLoadingState();
         }
 
-        final filteredNotifications = _filterNotifications(appState.notifications);
+        final filteredNotifications = _filterNotifications(notifProvider.notifications);
 
         if (filteredNotifications.isEmpty) {
           return _buildEmptyState();
@@ -453,41 +455,10 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   }
 
   Widget _buildLoadingState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          AnimatedBuilder(
-            animation: _pulseAnimation,
-            builder: (context, child) {
-              return Transform.scale(
-                scale: _pulseAnimation.value,
-                child: Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    gradient: AppTheme.primaryGradient,
-                    shape: BoxShape.circle,
-                    boxShadow: AppTheme.cyanGlow(intensity: 0.5),
-                  ),
-                  child: const Icon(
-                    Icons.notifications_outlined,
-                    color: Colors.white,
-                    size: 28,
-                  ),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'Loading notifications...',
-            style: TextStyle(
-              color: AppTheme.textMuted,
-            ),
-          ),
-        ],
-      ),
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: 6,
+      itemBuilder: (context, index) => const ShimmerNotificationItem(),
     );
   }
 

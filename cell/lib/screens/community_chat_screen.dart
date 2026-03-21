@@ -5,6 +5,7 @@ import 'dart:ui';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/avatar_widget.dart';
+import '../widgets/shimmer_skeleton.dart';
 import '../models/models.dart';
 
 class CommunityChatScreen extends StatefulWidget {
@@ -37,9 +38,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen>
   @override
   void initState() {
     super.initState();
-    _inputFocusNode.addListener(() {
-      setState(() => _isInputFocused = _inputFocusNode.hasFocus);
-    });
+    _inputFocusNode.addListener(_onFocusChanged);
     _pulseController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
@@ -50,10 +49,15 @@ class _CommunityChatScreenState extends State<CommunityChatScreen>
     );
   }
 
+  void _onFocusChanged() {
+    setState(() => _isInputFocused = _inputFocusNode.hasFocus);
+  }
+
   @override
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
+    _inputFocusNode.removeListener(_onFocusChanged);
     _inputFocusNode.dispose();
     _pulseController.dispose();
     _memberDrawerController.dispose();
@@ -119,7 +123,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen>
                     child: appState.selectedCommunity == null
                         ? _buildNoCommunitySelected()
                         : appState.isLoadingChat
-                            ? const Center(child: CircularProgressIndicator())
+                            ? _buildChatLoadingState()
                             : _buildMessageList(appState),
                   ),
                   if (appState.selectedCommunity != null)
@@ -435,6 +439,17 @@ class _CommunityChatScreenState extends State<CommunityChatScreen>
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildChatLoadingState() {
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      itemCount: 8,
+      itemBuilder: (context, index) {
+        // Alternate between left and right aligned messages
+        return ShimmerChatMessage(isRight: index % 3 == 0);
+      },
     );
   }
 

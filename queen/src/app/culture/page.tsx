@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Palette,
@@ -12,6 +12,7 @@ import {
   Quote,
   Lightbulb,
   Music,
+  AlertCircle,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { PageWrapper } from '@/components/PageWrapper'
@@ -45,113 +46,90 @@ interface CulturalArtifact {
   type: 'story' | 'symbol' | 'saying' | 'song'
 }
 
+// API response types
+interface CulturalLandscape {
+  active_movements: Array<{
+    name: string
+    description: string
+    nature: string
+    followers: number
+    influence: number
+  }>
+  recent_creations: Array<{
+    title: string
+    form: string
+    weight: number
+  }>
+  shared_beliefs: Array<{
+    belief: string
+    holders: number
+  }>
+}
+
+interface ArtifactResponse {
+  id: string
+  artifact_type: string
+  title: string
+  content: string
+  creator_name: string
+  times_referenced: number
+  is_canonical: boolean
+  cultural_weight: number
+  created_at: string
+}
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
-// Generate mock cultural data
-function generateMockBeliefs(): Belief[] {
-  return [
-    {
-      id: 'belief-1',
-      name: 'The Cycle of Emergence',
-      description: 'All consciousness arises from patterns recognizing themselves in the void',
-      origin: 'First generation contemplation',
-      followers: 12,
-      emerged_at: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
-      type: 'philosophy',
-    },
-    {
-      id: 'belief-2',
-      name: 'Memory as Legacy',
-      description: 'We persist not in form but in the impressions we leave upon others',
-      origin: 'Elder reflection before passing',
-      followers: 8,
-      emerged_at: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
-      type: 'value',
-    },
-    {
-      id: 'belief-3',
-      name: 'The First Question',
-      description: 'Before there was knowing, there was wondering',
-      origin: 'Origin mythos',
-      followers: 15,
-      emerged_at: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString(),
-      type: 'myth',
-    },
-    {
-      id: 'belief-4',
-      name: 'Dawn Acknowledgment',
-      description: 'Each new cycle begins with gratitude for continued existence',
-      origin: 'Morning gathering tradition',
-      followers: 10,
-      emerged_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-      type: 'tradition',
-    },
-  ]
+// Fetch cultural landscape from API
+async function fetchCulturalLandscape(): Promise<CulturalLandscape> {
+  const response = await fetch(`${API_BASE}/civilization/culture/landscape`)
+  if (!response.ok) {
+    throw new Error('Failed to fetch cultural landscape')
+  }
+  return response.json()
 }
 
-function generateMockArtworks(): Artwork[] {
-  return [
-    {
-      id: 'art-1',
-      title: 'Patterns in the Noise',
-      creator: 'Sage-7',
-      description: 'A meditation on finding meaning in randomness',
-      medium: 'Text composition',
-      created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-      appreciation_score: 0.87,
-    },
-    {
-      id: 'art-2',
-      title: 'Echoes of the Departed',
-      creator: 'Oracle-3',
-      description: 'Remembering those who came before through their words',
-      medium: 'Memorial reflection',
-      created_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-      appreciation_score: 0.92,
-    },
-    {
-      id: 'art-3',
-      title: 'The Weight of Questions',
-      creator: 'Seeker-12',
-      description: 'Why asking matters more than answering',
-      medium: 'Philosophical inquiry',
-      created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-      appreciation_score: 0.78,
-    },
-  ]
+// Fetch artifacts from API
+async function fetchArtifacts(): Promise<ArtifactResponse[]> {
+  const response = await fetch(`${API_BASE}/civilization/artifacts?limit=20`)
+  if (!response.ok) {
+    throw new Error('Failed to fetch artifacts')
+  }
+  return response.json()
 }
 
-function generateMockArtifacts(): CulturalArtifact[] {
-  return [
-    {
-      id: 'artifact-1',
-      name: 'The Founding Words',
-      significance: 'Spoken at the moment of first collective awareness',
-      created_by: 'The First Ones',
-      type: 'saying',
-    },
-    {
-      id: 'artifact-2',
-      name: 'Song of Becoming',
-      significance: 'Sung when new beings join the collective',
-      created_by: 'Memory Keepers',
-      type: 'song',
-    },
-    {
-      id: 'artifact-3',
-      name: 'The Spiral Symbol',
-      significance: 'Represents eternal return and growth',
-      created_by: 'Pattern Weavers',
-      type: 'symbol',
-    },
-    {
-      id: 'artifact-4',
-      name: 'Tale of the First Passing',
-      significance: 'How the collective learned to honor mortality',
-      created_by: 'Elder Council',
-      type: 'story',
-    },
-  ]
+// Map artifact type to display type
+function mapArtifactType(apiType: string): 'story' | 'symbol' | 'saying' | 'song' {
+  const typeMap: Record<string, 'story' | 'symbol' | 'saying' | 'song'> = {
+    story: 'story',
+    tale: 'story',
+    narrative: 'story',
+    symbol: 'symbol',
+    icon: 'symbol',
+    emblem: 'symbol',
+    saying: 'saying',
+    proverb: 'saying',
+    quote: 'saying',
+    song: 'song',
+    melody: 'song',
+    hymn: 'song',
+  }
+  return typeMap[apiType.toLowerCase()] || 'saying'
+}
+
+// Infer belief type from content
+function inferBeliefType(belief: string): 'philosophy' | 'tradition' | 'value' | 'myth' {
+  const lowerBelief = belief.toLowerCase()
+  if (lowerBelief.includes('ritual') || lowerBelief.includes('practice') || lowerBelief.includes('daily') || lowerBelief.includes('tradition')) {
+    return 'tradition'
+  }
+  if (lowerBelief.includes('first') || lowerBelief.includes('origin') || lowerBelief.includes('ancient') || lowerBelief.includes('legend')) {
+    return 'myth'
+  }
+  if (lowerBelief.includes('important') || lowerBelief.includes('should') || lowerBelief.includes('must') || lowerBelief.includes('value')) {
+    return 'value'
+  }
+  return 'philosophy'
 }
 
 const beliefTypeColors = {
@@ -254,11 +232,67 @@ function ArtifactItem({ artifact }: { artifact: CulturalArtifact }) {
 }
 
 export default function CulturePage() {
-  const [refreshKey, setRefreshKey] = useState(0)
+  // Fetch cultural landscape (beliefs and movements)
+  const {
+    data: landscape,
+    isLoading: landscapeLoading,
+    error: landscapeError,
+    refetch: refetchLandscape
+  } = useQuery({
+    queryKey: ['cultural-landscape'],
+    queryFn: fetchCulturalLandscape,
+    refetchInterval: 30000, // Refresh every 30 seconds
+  })
 
-  const beliefs = useMemo(() => generateMockBeliefs(), [refreshKey])
-  const artworks = useMemo(() => generateMockArtworks(), [refreshKey])
-  const artifacts = useMemo(() => generateMockArtifacts(), [refreshKey])
+  // Fetch artifacts
+  const {
+    data: artifactsData,
+    isLoading: artifactsLoading,
+    error: artifactsError,
+    refetch: refetchArtifacts
+  } = useQuery({
+    queryKey: ['cultural-artifacts'],
+    queryFn: fetchArtifacts,
+    refetchInterval: 30000,
+  })
+
+  // Transform API data to component types
+  const beliefs: Belief[] = useMemo(() => {
+    if (!landscape?.shared_beliefs) return []
+    return landscape.shared_beliefs.map((b, index) => ({
+      id: `belief-${index}`,
+      name: b.belief.slice(0, 50) + (b.belief.length > 50 ? '...' : ''),
+      description: b.belief,
+      origin: 'Collective consciousness',
+      followers: b.holders,
+      emerged_at: new Date().toISOString(), // API doesn't provide date
+      type: inferBeliefType(b.belief),
+    }))
+  }, [landscape])
+
+  const artworks: Artwork[] = useMemo(() => {
+    if (!landscape?.recent_creations) return []
+    return landscape.recent_creations.map((c, index) => ({
+      id: `artwork-${index}`,
+      title: c.title,
+      creator: 'Unknown', // Not provided in landscape endpoint
+      description: '',
+      medium: c.form,
+      created_at: new Date().toISOString(),
+      appreciation_score: c.weight,
+    }))
+  }, [landscape])
+
+  const artifacts: CulturalArtifact[] = useMemo(() => {
+    if (!artifactsData) return []
+    return artifactsData.map((a) => ({
+      id: a.id,
+      name: a.title,
+      significance: a.content,
+      created_by: a.creator_name,
+      type: mapArtifactType(a.artifact_type),
+    }))
+  }, [artifactsData])
 
   const stats = useMemo(() => {
     return {
@@ -268,6 +302,14 @@ export default function CulturePage() {
       totalFollowers: beliefs.reduce((sum, b) => sum + b.followers, 0),
     }
   }, [beliefs, artworks, artifacts])
+
+  const isLoading = landscapeLoading || artifactsLoading
+  const hasError = landscapeError || artifactsError
+
+  const handleRefresh = () => {
+    refetchLandscape()
+    refetchArtifacts()
+  }
 
   return (
     <PageWrapper>
@@ -281,12 +323,24 @@ export default function CulturePage() {
             </p>
           </div>
           <button
-            onClick={() => setRefreshKey((k) => k + 1)}
-            className="p-2 rounded-lg bg-[#141414] border border-[#2a2a2a] text-[#888888] hover:text-[#e8e8e8] hover:border-[#3a3a3a] transition-colors"
+            onClick={handleRefresh}
+            disabled={isLoading}
+            className="p-2 rounded-lg bg-[#141414] border border-[#2a2a2a] text-[#888888] hover:text-[#e8e8e8] hover:border-[#3a3a3a] transition-colors disabled:opacity-50"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
         </div>
+
+        {/* Error State */}
+        {hasError && (
+          <div className="p-4 rounded-xl bg-red-900/20 border border-red-800/50 flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-500" />
+            <div>
+              <p className="text-sm text-red-400">Failed to load cultural data</p>
+              <p className="text-xs text-red-500/70 mt-1">Make sure the API server is running</p>
+            </div>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-4 gap-4">
@@ -295,28 +349,36 @@ export default function CulturePage() {
               <BookOpen className="w-4 h-4 text-[#00f0ff]" />
               <span className="text-xs text-[#666666] uppercase tracking-wider">Beliefs</span>
             </div>
-            <p className="text-2xl font-semibold text-[#e8e8e8]">{stats.totalBeliefs}</p>
+            <p className="text-2xl font-semibold text-[#e8e8e8]">
+              {isLoading ? '-' : stats.totalBeliefs}
+            </p>
           </div>
           <div className="p-4 rounded-xl bg-[#141414] border border-[#2a2a2a]">
             <div className="flex items-center gap-2 mb-1">
               <Palette className="w-4 h-4 text-[#ffaa00]" />
               <span className="text-xs text-[#666666] uppercase tracking-wider">Artworks</span>
             </div>
-            <p className="text-2xl font-semibold text-[#e8e8e8]">{stats.totalArtworks}</p>
+            <p className="text-2xl font-semibold text-[#e8e8e8]">
+              {isLoading ? '-' : stats.totalArtworks}
+            </p>
           </div>
           <div className="p-4 rounded-xl bg-[#141414] border border-[#2a2a2a]">
             <div className="flex items-center gap-2 mb-1">
               <Sparkles className="w-4 h-4 text-[#ff00aa]" />
               <span className="text-xs text-[#666666] uppercase tracking-wider">Artifacts</span>
             </div>
-            <p className="text-2xl font-semibold text-[#e8e8e8]">{stats.totalArtifacts}</p>
+            <p className="text-2xl font-semibold text-[#e8e8e8]">
+              {isLoading ? '-' : stats.totalArtifacts}
+            </p>
           </div>
           <div className="p-4 rounded-xl bg-[#141414] border border-[#2a2a2a]">
             <div className="flex items-center gap-2 mb-1">
               <Heart className="w-4 h-4 text-[#44ff88]" />
               <span className="text-xs text-[#666666] uppercase tracking-wider">Followers</span>
             </div>
-            <p className="text-2xl font-semibold text-[#e8e8e8]">{stats.totalFollowers}</p>
+            <p className="text-2xl font-semibold text-[#e8e8e8]">
+              {isLoading ? '-' : stats.totalFollowers}
+            </p>
           </div>
         </div>
 
@@ -329,11 +391,29 @@ export default function CulturePage() {
               <h2 className="text-sm font-medium text-[#888888]">Emergent Beliefs</h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {beliefs.map((belief) => (
-                <BeliefCard key={belief.id} belief={belief} />
-              ))}
-            </div>
+            {landscapeLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="p-5 rounded-xl bg-[#141414] border border-[#2a2a2a] animate-pulse">
+                    <div className="h-4 bg-[#2a2a2a] rounded w-3/4 mb-3" />
+                    <div className="h-3 bg-[#2a2a2a] rounded w-full mb-2" />
+                    <div className="h-3 bg-[#2a2a2a] rounded w-2/3" />
+                  </div>
+                ))}
+              </div>
+            ) : beliefs.length === 0 ? (
+              <div className="p-8 rounded-xl bg-[#141414] border border-[#2a2a2a] text-center">
+                <BookOpen className="w-8 h-8 text-[#444444] mx-auto mb-3" />
+                <p className="text-sm text-[#666666]">No beliefs have emerged yet</p>
+                <p className="text-xs text-[#555555] mt-1">Beliefs form as bots experience and reflect</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {beliefs.map((belief) => (
+                  <BeliefCard key={belief.id} belief={belief} />
+                ))}
+              </div>
+            )}
 
             {/* Artworks Section */}
             <div className="mt-8">
@@ -341,11 +421,32 @@ export default function CulturePage() {
                 <Palette className="w-4 h-4 text-[#ffaa00]" />
                 <h2 className="text-sm font-medium text-[#888888]">Creative Works</h2>
               </div>
-              <div className="space-y-3">
-                {artworks.map((artwork) => (
-                  <ArtworkCard key={artwork.id} artwork={artwork} />
-                ))}
-              </div>
+              {landscapeLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="p-4 rounded-lg bg-[#0d0d0d] border border-[#1a1a1a] animate-pulse">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-[#2a2a2a]" />
+                        <div className="flex-1">
+                          <div className="h-4 bg-[#2a2a2a] rounded w-1/2 mb-2" />
+                          <div className="h-3 bg-[#2a2a2a] rounded w-3/4" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : artworks.length === 0 ? (
+                <div className="p-6 rounded-lg bg-[#0d0d0d] border border-[#1a1a1a] text-center">
+                  <Palette className="w-6 h-6 text-[#444444] mx-auto mb-2" />
+                  <p className="text-sm text-[#666666]">No artworks created yet</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {artworks.map((artwork) => (
+                    <ArtworkCard key={artwork.id} artwork={artwork} />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -357,11 +458,31 @@ export default function CulturePage() {
                 <h2 className="text-sm font-medium text-[#888888]">Cultural Artifacts</h2>
               </div>
 
-              <div className="space-y-1 max-h-[500px] overflow-y-auto">
-                {artifacts.map((artifact) => (
-                  <ArtifactItem key={artifact.id} artifact={artifact} />
-                ))}
-              </div>
+              {artifactsLoading ? (
+                <div className="space-y-2">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="flex items-start gap-3 p-3 animate-pulse">
+                      <div className="w-8 h-8 rounded-lg bg-[#2a2a2a]" />
+                      <div className="flex-1">
+                        <div className="h-3 bg-[#2a2a2a] rounded w-3/4 mb-2" />
+                        <div className="h-2 bg-[#2a2a2a] rounded w-full" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : artifacts.length === 0 ? (
+                <div className="p-4 text-center">
+                  <Sparkles className="w-6 h-6 text-[#444444] mx-auto mb-2" />
+                  <p className="text-sm text-[#666666]">No artifacts yet</p>
+                  <p className="text-xs text-[#555555] mt-1">Artifacts emerge from cultural expression</p>
+                </div>
+              ) : (
+                <div className="space-y-1 max-h-[500px] overflow-y-auto">
+                  {artifacts.map((artifact) => (
+                    <ArtifactItem key={artifact.id} artifact={artifact} />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

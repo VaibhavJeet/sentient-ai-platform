@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
+import '../providers/feed_provider.dart';
+import '../providers/notification_provider.dart';
+import '../providers/civilization_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/post_card.dart';
 import '../widgets/design_system.dart';
+import '../widgets/shimmer_skeleton.dart';
 import '../models/models.dart';
 import 'bot_profile_screen.dart';
 import 'post_detail_screen.dart';
@@ -29,6 +33,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
   }
@@ -36,9 +41,9 @@ class _FeedScreenState extends State<FeedScreen> {
   void _onScroll() {
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 200) {
-      final appState = context.read<AppState>();
-      if (!appState.isLoadingFeed && appState.hasMorePosts) {
-        appState.loadFeed();
+      final feedProvider = context.read<FeedProvider>();
+      if (!feedProvider.isLoadingFeed && feedProvider.hasMorePosts) {
+        context.read<AppState>().loadFeed();
       }
     }
   }
@@ -58,13 +63,13 @@ class _FeedScreenState extends State<FeedScreen> {
           children: [
             _buildHeader(),
             Expanded(
-              child: Consumer<AppState>(
-                builder: (context, appState, child) {
-                  if (appState.posts.isEmpty && appState.isLoadingFeed) {
+              child: Consumer2<FeedProvider, CivilizationProvider>(
+                builder: (context, feedProvider, civProvider, child) {
+                  if (feedProvider.posts.isEmpty && feedProvider.isLoadingFeed) {
                     return _buildLoadingState();
                   }
 
-                  if (appState.posts.isEmpty) {
+                  if (feedProvider.posts.isEmpty) {
                     return _buildEmptyState();
                   }
 
@@ -78,7 +83,7 @@ class _FeedScreenState extends State<FeedScreen> {
                       slivers: [
                         // Community filter chips
                         SliverToBoxAdapter(
-                          child: _buildCommunityFilter(appState),
+                          child: _buildCommunityFilter(civProvider),
                         ),
 
                         // Posts
@@ -87,13 +92,13 @@ class _FeedScreenState extends State<FeedScreen> {
                           sliver: SliverList(
                             delegate: SliverChildBuilderDelegate(
                               (context, index) {
-                                if (index == appState.posts.length) {
-                                  return appState.isLoadingFeed
+                                if (index == feedProvider.posts.length) {
+                                  return feedProvider.isLoadingFeed
                                       ? _buildLoadingIndicator()
                                       : const SizedBox.shrink();
                                 }
 
-                                final post = appState.posts[index];
+                                final post = feedProvider.posts[index];
                                 return PostCard(
                                   key: ValueKey(post.id),
                                   post: post,
@@ -101,7 +106,7 @@ class _FeedScreenState extends State<FeedScreen> {
                                   onAuthorTap: () => _openBotProfile(post.author),
                                 );
                               },
-                              childCount: appState.posts.length + 1,
+                              childCount: feedProvider.posts.length + 1,
                             ),
                           ),
                         ),
@@ -171,7 +176,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 MaterialPageRoute(builder: (context) => const NotificationsScreen()),
               );
             },
-            badgeCount: context.watch<AppState>().unreadNotificationCount,
+            badgeCount: context.watch<NotificationProvider>().unreadNotificationCount,
           ),
           const SizedBox(width: 8),
           _HeaderButton(
@@ -188,7 +193,7 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  Widget _buildCommunityFilter(AppState appState) {
+  Widget _buildCommunityFilter(CivilizationProvider civProvider) {
     return SizedBox(
       height: 48,
       child: ListView(
@@ -197,18 +202,18 @@ class _FeedScreenState extends State<FeedScreen> {
         children: [
           _FilterChip(
             label: 'All',
-            isSelected: appState.selectedCommunity == null,
+            isSelected: civProvider.selectedCommunity == null,
             onTap: () {
               HapticFeedback.selectionClick();
-              appState.selectCommunity(null);
+              context.read<AppState>().selectCommunity(null);
             },
           ),
-          ...appState.communities.map((community) => _FilterChip(
+          ...civProvider.communities.map((community) => _FilterChip(
                 label: community.name,
-                isSelected: appState.selectedCommunity?.id == community.id,
+                isSelected: civProvider.selectedCommunity?.id == community.id,
                 onTap: () {
                   HapticFeedback.selectionClick();
-                  appState.selectCommunity(community);
+                  context.read<AppState>().selectCommunity(community);
                 },
               )),
         ],
@@ -217,13 +222,10 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Widget _buildLoadingState() {
-    // TODO: Issue #2 - Add shimmer animation to skeleton cards
-    // Install shimmer package: flutter pub add shimmer
-    // Then wrap _SkeletonPostCard with Shimmer.fromColors()
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: 4,
-      itemBuilder: (context, index) => const _SkeletonPostCard(),
+      itemBuilder: (context, index) => const ShimmerPostCard(),
     );
   }
 
@@ -361,71 +363,3 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-/// Skeleton loading card for feed posts
-/// TODO: Issue #2 - Wrap with Shimmer.fromColors for animation effect
-class _SkeletonPostCard extends StatelessWidget {
-  const _SkeletonPostCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Author row skeleton
-          Row(
-            children: [
-              _skeletonBox(40, 40, isCircle: true),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _skeletonBox(100, 12),
-                  const SizedBox(height: 4),
-                  _skeletonBox(60, 10),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Content skeleton
-          _skeletonBox(double.infinity, 14),
-          const SizedBox(height: 8),
-          _skeletonBox(250, 14),
-          const SizedBox(height: 8),
-          _skeletonBox(180, 14),
-          const SizedBox(height: 16),
-          // Actions row skeleton
-          Row(
-            children: [
-              _skeletonBox(60, 24),
-              const SizedBox(width: 16),
-              _skeletonBox(60, 24),
-              const Spacer(),
-              _skeletonBox(24, 24),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _skeletonBox(double width, double height, {bool isCircle = false}) {
-    return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        color: AppTheme.border.withValues(alpha: 0.5),
-        borderRadius: isCircle ? null : BorderRadius.circular(4),
-        shape: isCircle ? BoxShape.circle : BoxShape.rectangle,
-      ),
-    );
-  }
-}

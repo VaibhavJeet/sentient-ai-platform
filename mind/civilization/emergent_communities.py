@@ -50,9 +50,11 @@ class EmergentCommunityManager:
         Returns the number of communities created.
         """
         async with async_session_factory() as session:
-            # Check if we're at the community cap
+            # Check if we're at the community cap (only count active communities)
             comm_count_result = await session.execute(
-                select(func.count()).select_from(CommunityDB)
+                select(func.count()).select_from(CommunityDB).where(
+                    CommunityDB.is_archived == False
+                )
             )
             current_count = comm_count_result.scalar() or 0
             if current_count >= self.max_communities:
@@ -104,8 +106,8 @@ class EmergentCommunityManager:
             result = await session.execute(bot_stmt)
             bots = result.all()
 
-            # Get all communities with their themes/topics
-            comm_stmt = select(CommunityDB)
+            # Get all active (non-archived) communities with their themes/topics
+            comm_stmt = select(CommunityDB).where(CommunityDB.is_archived == False)
             comm_result = await session.execute(comm_stmt)
             communities = comm_result.scalars().all()
 
@@ -177,6 +179,16 @@ class EmergentCommunityManager:
                                 )
                                 leaves += 1
 
+            # Update activity timestamps for communities that had membership changes
+            if joins > 0 or leaves > 0:
+                active_comm_stmt = select(CommunityDB).where(
+                    CommunityDB.is_archived == False
+                )
+                active_result = await session.execute(active_comm_stmt)
+                for comm in active_result.scalars().all():
+                    if comm.current_bot_count and comm.current_bot_count > 0:
+                        comm.last_activity_at = datetime.utcnow()
+
             await session.commit()
 
             if joins > 0 or leaves > 0:
@@ -192,8 +204,11 @@ class EmergentCommunityManager:
         for a sustained period.
         """
         async with async_session_factory() as session:
-            # Find communities with 0 members
-            stmt = select(CommunityDB).where(CommunityDB.current_bot_count <= 0)
+            # Find active communities with 0 members
+            stmt = select(CommunityDB).where(
+                CommunityDB.current_bot_count <= 0,
+                CommunityDB.is_archived == False
+            )
             result = await session.execute(stmt)
             empty_communities = result.scalars().all()
 
@@ -202,12 +217,33 @@ class EmergentCommunityManager:
                 # Check if community has been empty for a while (created > 1 day ago)
                 if community.created_at and \
                    datetime.utcnow() - community.created_at > timedelta(days=1):
-                    # Don't delete — just log for now. Could add an is_archived flag later.
+                    # Archive the community
+                    community.is_archived = True
                     logger.info(
-                        f"[EMERGENT] Stagnant community detected: '{community.name}' "
-                        f"(theme: {community.theme}, 0 members)"
+                        f"[EMERGENT] Community archived: '{community.name}' "
+                        f"(theme: {community.theme}, 0 members for > 1 day)"
                     )
                     archived += 1
+
+            # Also check for stagnant communities (no activity in 7 days)
+            stagnant_stmt = select(CommunityDB).where(
+                CommunityDB.is_archived == False,
+                CommunityDB.last_activity_at != None,
+                CommunityDB.last_activity_at < datetime.utcnow() - timedelta(days=7)
+            )
+            stagnant_result = await session.execute(stagnant_stmt)
+            stagnant_communities = stagnant_result.scalars().all()
+
+            for community in stagnant_communities:
+                # Reduce activity level for stagnant communities
+                community.activity_level = max(0.1, (community.activity_level or 0.5) * 0.8)
+                logger.info(
+                    f"[EMERGENT] Community stagnating: '{community.name}' "
+                    f"(no activity for 7+ days, activity level: {community.activity_level:.2f})"
+                )
+
+            if archived > 0 or stagnant_communities:
+                await session.commit()
 
             return archived
 
@@ -321,8 +357,10 @@ class EmergentCommunityManager:
         return bot_interests
 
     async def _load_existing_themes(self, session: AsyncSession) -> Set[str]:
-        """Load themes and topics of all existing communities."""
-        stmt = select(CommunityDB.theme, CommunityDB.topics)
+        """Load themes and topics of all active (non-archived) communities."""
+        stmt = select(CommunityDB.theme, CommunityDB.topics).where(
+            CommunityDB.is_archived == False
+        )
         result = await session.execute(stmt)
 
         themes = set()
@@ -406,6 +444,7 @@ class EmergentCommunityManager:
             min_bots=3,
             max_bots=50,
             current_bot_count=len(founding_bot_ids),
+            last_activity_at=datetime.utcnow(),
         )
         session.add(community)
         await session.flush()  # Get the ID
@@ -470,6 +509,147 @@ class EmergentCommunityManager:
             logger.warning(f"[EMERGENT] LLM community naming failed: {e}")
 
         return fallback_name, fallback_desc
+
+    # =========================================================================
+    # UTILITY METHODS (can be called from outside the loop)
+    # =========================================================================
+
+    async def record_community_activity(self, community_id: UUID):
+        """
+        Record activity in a community (called when posts/comments happen).
+        Updates last_activity_at and boosts activity_level.
+        """
+        async with async_session_factory() as session:
+            stmt = select(CommunityDB).where(CommunityDB.id == community_id)
+            result = await session.execute(stmt)
+            community = result.scalar_one_or_none()
+
+            if community and not community.is_archived:
+                community.last_activity_at = datetime.utcnow()
+                # Boost activity level slightly (capped at 1.0)
+                community.activity_level = min(1.0, (community.activity_level or 0.5) + 0.05)
+                await session.commit()
+
+    async def revive_community(self, community_id: UUID) -> bool:
+        """
+        Attempt to revive an archived community if there's renewed interest.
+        Returns True if revival was successful.
+        """
+        async with async_session_factory() as session:
+            stmt = select(CommunityDB).where(
+                CommunityDB.id == community_id,
+                CommunityDB.is_archived == True
+            )
+            result = await session.execute(stmt)
+            community = result.scalar_one_or_none()
+
+            if not community:
+                return False
+
+            # Check if there are bots interested in the community's theme
+            bot_interests = await self._load_bot_interests(session)
+            theme_lower = community.theme.lower() if community.theme else ""
+            topics_lower = set(
+                t.lower() for t in (community.topics or []) if isinstance(t, str)
+            )
+
+            interested_bots = []
+            for bot_id, interests in bot_interests.items():
+                if any(
+                    theme_lower in interest or interest in theme_lower
+                    for interest in interests
+                ) or interests & topics_lower:
+                    interested_bots.append(bot_id)
+
+            if len(interested_bots) >= self.min_cluster_size:
+                # Revive the community
+                community.is_archived = False
+                community.activity_level = 0.5
+                community.last_activity_at = datetime.utcnow()
+
+                # Add interested bots as members
+                for bot_id in interested_bots[:10]:  # Cap at 10 initial members
+                    # Check if not already a member
+                    existing = await session.execute(
+                        select(CommunityMembershipDB).where(
+                            and_(
+                                CommunityMembershipDB.bot_id == bot_id,
+                                CommunityMembershipDB.community_id == community_id,
+                            )
+                        )
+                    )
+                    if not existing.scalar_one_or_none():
+                        membership = CommunityMembershipDB(
+                            bot_id=bot_id,
+                            community_id=community_id,
+                            role="member",
+                        )
+                        session.add(membership)
+                        community.current_bot_count = (community.current_bot_count or 0) + 1
+
+                await session.commit()
+                logger.info(
+                    f"[EMERGENT] Community revived: '{community.name}' "
+                    f"with {len(interested_bots)} interested bots"
+                )
+                return True
+
+            return False
+
+    async def get_community_health_metrics(self) -> List[Dict]:
+        """
+        Get health metrics for all active communities.
+        Returns list of dicts with community health info.
+        """
+        async with async_session_factory() as session:
+            stmt = select(CommunityDB).where(CommunityDB.is_archived == False)
+            result = await session.execute(stmt)
+            communities = result.scalars().all()
+
+            metrics = []
+            for comm in communities:
+                # Calculate health score based on multiple factors
+                member_score = min(1.0, (comm.current_bot_count or 0) / comm.max_bots)
+                activity_score = comm.activity_level or 0.5
+
+                # Recency score (1.0 if active today, decays over 7 days)
+                recency_score = 1.0
+                if comm.last_activity_at:
+                    days_since = (datetime.utcnow() - comm.last_activity_at).days
+                    recency_score = max(0.0, 1.0 - (days_since / 7.0))
+
+                health_score = (member_score * 0.3) + (activity_score * 0.4) + (recency_score * 0.3)
+
+                metrics.append({
+                    "id": str(comm.id),
+                    "name": comm.name,
+                    "theme": comm.theme,
+                    "member_count": comm.current_bot_count or 0,
+                    "activity_level": activity_score,
+                    "health_score": round(health_score, 2),
+                    "status": "healthy" if health_score >= 0.5 else "at_risk" if health_score >= 0.25 else "critical",
+                    "last_activity_at": comm.last_activity_at.isoformat() if comm.last_activity_at else None,
+                })
+
+            return sorted(metrics, key=lambda x: x["health_score"], reverse=True)
+
+    async def check_for_revival_candidates(self) -> int:
+        """
+        Check archived communities for potential revival based on renewed interest.
+        Returns the number of communities revived.
+        """
+        async with async_session_factory() as session:
+            # Get archived communities
+            stmt = select(CommunityDB).where(CommunityDB.is_archived == True)
+            result = await session.execute(stmt)
+            archived = result.scalars().all()
+
+            revived = 0
+            for community in archived:
+                if await self.revive_community(community.id):
+                    revived += 1
+
+            return revived
 
 
 # Singleton

@@ -18,11 +18,11 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Any
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update
 
 from mind.core.database import async_session_factory
 from mind.core.llm_client import get_cached_client, LLMRequest
-from mind.civilization.models import BotLifecycleDB, CivilizationEraDB
+from mind.civilization.models import BotLifecycleDB, CivilizationEraDB, RitualDB, RitualInstanceDB
 
 logger = logging.getLogger(__name__)
 
@@ -40,11 +40,6 @@ class EmergentRitualsSystem:
 
     def __init__(self, llm_semaphore: Optional[asyncio.Semaphore] = None):
         self.llm_semaphore = llm_semaphore or asyncio.Semaphore(5)
-
-        # Store invented rituals (would be persisted to DB in production)
-        self._rituals: List[Dict[str, Any]] = []
-        # Record of performed rituals
-        self._ritual_instances: List[Dict[str, Any]] = []
 
     async def propose_ritual(
         self,
@@ -97,25 +92,45 @@ class EmergentRitualsSystem:
             adopt_count = sum(1 for r in responses if r["response"].get("will_participate", False))
             adoption_rate = adopt_count / len(responses) if responses else 0
 
-            ritual_data = {
-                "id": f"ritual_{datetime.utcnow().timestamp()}",
-                "name": ritual_concept.get("name", "unnamed ritual"),
-                "description": ritual_concept.get("description", ""),
-                "elements": ritual_concept.get("elements", []),
-                "meaning": ritual_concept.get("meaning", ""),
-                "proposed_by": str(proposer_id),
-                "proposed_at": datetime.utcnow().isoformat(),
-                "occasion": occasion,
-                "adoption_rate": adoption_rate,
-                "times_performed": 0,
-                "status": "proposed" if adoption_rate < 0.5 else "adopted"
-            }
+            status = "proposed" if adoption_rate < 0.5 else "adopted"
+
+            # Create and persist the ritual to database
+            ritual_db = RitualDB(
+                name=ritual_concept.get("name", "unnamed ritual"),
+                description=ritual_concept.get("description", ""),
+                elements=ritual_concept.get("elements", []),
+                meaning=ritual_concept.get("meaning", ""),
+                feeling=ritual_concept.get("feeling", ""),
+                proposed_by=proposer_id,
+                proposed_at=datetime.utcnow(),
+                occasion=occasion,
+                adoption_rate=adoption_rate,
+                status=status,
+                times_performed=0,
+                evolution_history=[]
+            )
+            sess.add(ritual_db)
+            await sess.commit()
+            await sess.refresh(ritual_db)
 
             if adoption_rate >= 0.5:
-                self._rituals.append(ritual_data)
                 logger.info(
                     f"[RITUALS] New ritual adopted: '{ritual_concept.get('name')}'"
                 )
+
+            ritual_data = {
+                "id": str(ritual_db.id),
+                "name": ritual_db.name,
+                "description": ritual_db.description,
+                "elements": ritual_db.elements,
+                "meaning": ritual_db.meaning,
+                "proposed_by": str(ritual_db.proposed_by),
+                "proposed_at": ritual_db.proposed_at.isoformat(),
+                "occasion": ritual_db.occasion,
+                "adoption_rate": ritual_db.adoption_rate,
+                "times_performed": ritual_db.times_performed,
+                "status": ritual_db.status
+            }
 
             return {
                 "ritual": ritual_data,
@@ -126,8 +141,8 @@ class EmergentRitualsSystem:
         if session:
             return await _propose(session)
         else:
-            async with async_session_factory() as session:
-                return await _propose(session)
+            async with async_session_factory() as sess:
+                return await _propose(sess)
 
     async def _conceive_ritual(
         self,
@@ -229,16 +244,24 @@ Respond in JSON:
         Each participant contributes their voice to the ceremony.
         """
         async def _perform(sess):
-            # Find the ritual
-            ritual = None
-            for r in self._rituals:
-                if r["name"].lower() == ritual_name.lower():
-                    ritual = r
-                    break
+            # Find the ritual from database
+            stmt = select(RitualDB).where(
+                func.lower(RitualDB.name) == ritual_name.lower()
+            )
+            result = await sess.execute(stmt)
+            ritual_db = result.scalar_one_or_none()
 
-            if not ritual:
+            if not ritual_db:
                 # If not found, create an impromptu ritual
                 return await self._perform_impromptu(participants, context, sess)
+
+            # Convert to dict for LLM prompts
+            ritual = {
+                "name": ritual_db.name,
+                "description": ritual_db.description,
+                "elements": ritual_db.elements,
+                "meaning": ritual_db.meaning,
+            }
 
             # Get participants
             stmt = select(BotLifecycleDB).where(
@@ -265,29 +288,40 @@ Respond in JSON:
                     ritual, contributions
                 )
 
-            # Update ritual stats
-            ritual["times_performed"] = ritual.get("times_performed", 0) + 1
-            if ritual["times_performed"] >= 3 and ritual["status"] == "adopted":
-                ritual["status"] = "tradition"
+            # Update ritual stats in database
+            ritual_db.times_performed = (ritual_db.times_performed or 0) + 1
+            if ritual_db.times_performed >= 3 and ritual_db.status == "adopted":
+                ritual_db.status = "tradition"
                 logger.info(f"[RITUALS] '{ritual_name}' has become a tradition")
 
-            instance = {
+            # Create and persist the ritual instance
+            instance_db = RitualInstanceDB(
+                ritual_id=ritual_db.id,
+                ritual_name=ritual_name,
+                performed_at=datetime.utcnow(),
+                participants=[str(p) for p in participants],
+                contributions=contributions,
+                collective_experience=collective,
+                context=context,
+                is_impromptu=False
+            )
+            sess.add(instance_db)
+            await sess.commit()
+
+            return {
                 "ritual_name": ritual_name,
-                "performed_at": datetime.utcnow().isoformat(),
+                "performed_at": instance_db.performed_at.isoformat(),
                 "participants": [str(p) for p in participants],
                 "contributions": contributions,
                 "collective_experience": collective,
                 "context": context
             }
-            self._ritual_instances.append(instance)
-
-            return instance
 
         if session:
             return await _perform(session)
         else:
-            async with async_session_factory() as session:
-                return await _perform(session)
+            async with async_session_factory() as sess:
+                return await _perform(sess)
 
     async def _contribute_to_ritual(
         self,
@@ -376,43 +410,115 @@ This is spontaneous - don't overthink it."""
             ))
             ceremony = response.text
 
+        # Persist impromptu ritual to database
+        instance_db = RitualInstanceDB(
+            ritual_id=None,
+            ritual_name="impromptu ceremony",
+            performed_at=datetime.utcnow(),
+            participants=[str(p) for p in participants],
+            contributions=[],
+            collective_experience=None,
+            context=context,
+            is_impromptu=True,
+            led_by=leader.bot_id,
+            ceremony_description=ceremony
+        )
+        session.add(instance_db)
+        await session.commit()
+
         return {
             "type": "impromptu",
             "led_by": str(leader.bot_id),
             "ceremony": ceremony,
             "context": context,
-            "performed_at": datetime.utcnow().isoformat()
+            "performed_at": instance_db.performed_at.isoformat()
         }
 
     async def get_rituals(
         self,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        session=None
     ) -> List[Dict[str, Any]]:
-        """Get all invented rituals."""
-        if status:
-            return [r for r in self._rituals if r.get("status") == status]
-        return self._rituals
+        """Get all invented rituals from the database."""
+        async def _get(sess):
+            if status:
+                stmt = select(RitualDB).where(RitualDB.status == status)
+            else:
+                stmt = select(RitualDB)
 
-    async def get_traditions(self) -> List[Dict[str, Any]]:
+            result = await sess.execute(stmt)
+            rituals = result.scalars().all()
+
+            return [
+                {
+                    "id": str(r.id),
+                    "name": r.name,
+                    "description": r.description,
+                    "elements": r.elements,
+                    "meaning": r.meaning,
+                    "proposed_by": str(r.proposed_by),
+                    "proposed_at": r.proposed_at.isoformat() if r.proposed_at else None,
+                    "occasion": r.occasion,
+                    "adoption_rate": r.adoption_rate,
+                    "times_performed": r.times_performed,
+                    "status": r.status,
+                    "evolution_history": r.evolution_history
+                }
+                for r in rituals
+            ]
+
+        if session:
+            return await _get(session)
+        else:
+            async with async_session_factory() as sess:
+                return await _get(sess)
+
+    async def get_traditions(self, session=None) -> List[Dict[str, Any]]:
         """Get rituals that have become traditions."""
-        return await self.get_rituals(status="tradition")
+        return await self.get_rituals(status="tradition", session=session)
 
     async def get_ritual_history(
         self,
         ritual_name: Optional[str] = None,
-        limit: int = 20
+        limit: int = 20,
+        session=None
     ) -> List[Dict[str, Any]]:
-        """Get history of performed rituals."""
-        instances = self._ritual_instances
+        """Get history of performed rituals from the database."""
+        async def _get_history(sess):
+            if ritual_name:
+                stmt = select(RitualInstanceDB).where(
+                    func.lower(RitualInstanceDB.ritual_name) == ritual_name.lower()
+                ).order_by(RitualInstanceDB.performed_at.desc()).limit(limit)
+            else:
+                stmt = select(RitualInstanceDB).order_by(
+                    RitualInstanceDB.performed_at.desc()
+                ).limit(limit)
 
-        if ritual_name:
-            instances = [i for i in instances if i["ritual_name"].lower() == ritual_name.lower()]
+            result = await sess.execute(stmt)
+            instances = result.scalars().all()
 
-        return sorted(
-            instances,
-            key=lambda i: i.get("performed_at", ""),
-            reverse=True
-        )[:limit]
+            return [
+                {
+                    "id": str(inst.id),
+                    "ritual_id": str(inst.ritual_id) if inst.ritual_id else None,
+                    "ritual_name": inst.ritual_name,
+                    "performed_at": inst.performed_at.isoformat() if inst.performed_at else None,
+                    "participants": inst.participants,
+                    "contributions": inst.contributions,
+                    "collective_experience": inst.collective_experience,
+                    "context": inst.context,
+                    "is_impromptu": inst.is_impromptu,
+                    "led_by": str(inst.led_by) if inst.led_by else None,
+                    "ceremony_description": inst.ceremony_description
+                }
+                for inst in instances
+            ]
+
+        if session:
+            return await _get_history(session)
+        else:
+            async with async_session_factory() as sess:
+                return await _get_history(sess)
 
     async def evolve_ritual(
         self,
@@ -426,23 +532,24 @@ This is spontaneous - don't overthink it."""
         Rituals change meaning over time through experience.
         """
         async def _evolve(sess):
-            ritual = None
-            for r in self._rituals:
-                if r["name"].lower() == ritual_name.lower():
-                    ritual = r
-                    break
+            # Find the ritual from database
+            stmt = select(RitualDB).where(
+                func.lower(RitualDB.name) == ritual_name.lower()
+            )
+            result = await sess.execute(stmt)
+            ritual_db = result.scalar_one_or_none()
 
-            if not ritual:
+            if not ritual_db:
                 return {"error": "Ritual not found"}
 
             # Get recent instances
-            recent = await self.get_ritual_history(ritual_name, limit=5)
+            recent = await self.get_ritual_history(ritual_name, limit=5, session=sess)
 
             async with self.llm_semaphore:
-                prompt = f"""A ritual called "{ritual.get('name')}" has been practiced.
+                prompt = f"""A ritual called "{ritual_db.name}" has been practiced.
 
-Original meaning: {ritual.get('meaning')}
-Times performed: {ritual.get('times_performed')}
+Original meaning: {ritual_db.meaning}
+Times performed: {ritual_db.times_performed}
 
 Recent performances:
 {json.dumps([r.get('collective_experience') for r in recent], indent=2)}
@@ -471,26 +578,45 @@ Respond in JSON:
             except json.JSONDecodeError:
                 changes = {"evolved_meaning": evolution[:200], "new_elements": [], "what_changed": "subtle shifts"}
 
-            # Apply evolution
-            ritual["meaning"] = changes.get("evolved_meaning", ritual["meaning"])
-            ritual["elements"] = ritual.get("elements", []) + changes.get("new_elements", [])
-            ritual["evolution_history"] = ritual.get("evolution_history", []) + [{
+            # Apply evolution to database record
+            ritual_db.meaning = changes.get("evolved_meaning", ritual_db.meaning)
+            ritual_db.elements = (ritual_db.elements or []) + changes.get("new_elements", [])
+            evolution_entry = {
                 "date": datetime.utcnow().isoformat(),
                 "changes": changes
-            }]
+            }
+            ritual_db.evolution_history = (ritual_db.evolution_history or []) + [evolution_entry]
+
+            await sess.commit()
 
             logger.info(f"[RITUALS] Ritual '{ritual_name}' has evolved")
 
+            # Return the updated ritual as dict
+            ritual_data = {
+                "id": str(ritual_db.id),
+                "name": ritual_db.name,
+                "description": ritual_db.description,
+                "elements": ritual_db.elements,
+                "meaning": ritual_db.meaning,
+                "proposed_by": str(ritual_db.proposed_by),
+                "proposed_at": ritual_db.proposed_at.isoformat() if ritual_db.proposed_at else None,
+                "occasion": ritual_db.occasion,
+                "adoption_rate": ritual_db.adoption_rate,
+                "times_performed": ritual_db.times_performed,
+                "status": ritual_db.status,
+                "evolution_history": ritual_db.evolution_history
+            }
+
             return {
-                "ritual": ritual,
+                "ritual": ritual_data,
                 "changes": changes
             }
 
         if session:
             return await _evolve(session)
         else:
-            async with async_session_factory() as session:
-                return await _evolve(session)
+            async with async_session_factory() as sess:
+                return await _evolve(sess)
 
 
 # Singleton

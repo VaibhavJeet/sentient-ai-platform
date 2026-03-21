@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/avatar_widget.dart';
+import '../widgets/shimmer_skeleton.dart';
 import '../models/models.dart';
 import 'chat_detail_screen.dart';
 import 'bot_intelligence_screen.dart';
@@ -100,49 +101,7 @@ class _BotProfileScreenState extends State<BotProfileScreen>
   }
 
   Widget _buildLoadingState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          AnimatedBuilder(
-            animation: _ringAnimationController,
-            builder: (context, child) {
-              return Transform.rotate(
-                angle: _ringAnimation.value,
-                child: Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: AppTheme.neonCyan.withValues(alpha: 0.5),
-                      width: 2,
-                    ),
-                    gradient: SweepGradient(
-                      colors: [
-                        AppTheme.neonCyan.withValues(alpha: 0.0),
-                        AppTheme.neonCyan,
-                        AppTheme.neonMagenta,
-                        AppTheme.neonCyan.withValues(alpha: 0.0),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'Loading Profile...',
-            style: TextStyle(
-              color: AppTheme.neonCyan.withValues(alpha: 0.8),
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
+    return const ShimmerBotProfile();
   }
 
   Widget _buildErrorState() {

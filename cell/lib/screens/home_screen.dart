@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/design_system.dart';
+import '../widgets/shimmer_skeleton.dart';
 import 'settings_screen.dart';
 import 'bot_discovery_screen.dart';
 
@@ -349,28 +350,10 @@ class _CivilizationDashboardState extends State<CivilizationDashboard> {
   }
 
   Widget _buildLoadingState() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: 32,
-            height: 32,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation(AppTheme.semanticGreen),
-            ),
-          ),
-          SizedBox(height: 16),
-          Text(
-            'Observing civilization...',
-            style: TextStyle(
-              color: AppTheme.textMuted,
-              fontSize: 14,
-            ),
-          ),
-        ],
-      ),
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: 4,
+      itemBuilder: (context, index) => const ShimmerPostCard(),
     );
   }
 
@@ -702,33 +685,82 @@ class TimelineScreen extends StatefulWidget {
 
 class _TimelineScreenState extends State<TimelineScreen> {
   final ApiService _api = ApiService();
+  final ScrollController _scrollController = ScrollController();
   List<dynamic> _events = [];
   bool _isLoading = true;
   String? _error;
 
+  // Pagination state
+  static const int _pageSize = 20;
+  int _currentPage = 0;
+  bool _hasMore = true;
+  bool _isLoadingMore = false;
+
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _loadTimeline();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      _loadMoreEvents();
+    }
   }
 
   Future<void> _loadTimeline() async {
     setState(() {
       _isLoading = true;
       _error = null;
+      _currentPage = 0;
+      _hasMore = true;
     });
 
     try {
-      final events = await _api.getCivilizationTimeline();
+      final events = await _api.getCivilizationTimeline(
+        limit: _pageSize,
+        offset: 0,
+      );
       setState(() {
         _events = events;
         _isLoading = false;
+        _hasMore = events.length >= _pageSize;
       });
     } catch (e) {
       setState(() {
         _error = e.toString();
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _loadMoreEvents() async {
+    if (_isLoadingMore || !_hasMore) return;
+
+    setState(() => _isLoadingMore = true);
+
+    try {
+      final nextPage = _currentPage + 1;
+      final events = await _api.getCivilizationTimeline(
+        limit: _pageSize,
+        offset: nextPage * _pageSize,
+      );
+      setState(() {
+        _events.addAll(events);
+        _currentPage = nextPage;
+        _hasMore = events.length >= _pageSize;
+        _isLoadingMore = false;
+      });
+    } catch (e) {
+      setState(() => _isLoadingMore = false);
     }
   }
 
@@ -808,10 +840,10 @@ class _TimelineScreenState extends State<TimelineScreen> {
   }
 
   Widget _buildLoadingState() {
-    return const Center(
-      child: CircularProgressIndicator(
-        valueColor: AlwaysStoppedAnimation(AppTheme.semanticBlue),
-      ),
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: 5,
+      itemBuilder: (context, index) => const ShimmerNotificationItem(),
     );
   }
 
@@ -842,9 +874,33 @@ class _TimelineScreenState extends State<TimelineScreen> {
       color: AppTheme.semanticBlue,
       backgroundColor: AppTheme.surface,
       child: ListView.builder(
+        controller: _scrollController,
         padding: const EdgeInsets.only(top: 8, bottom: 100),
-        itemCount: _events.length,
+        itemCount: _events.length + (_hasMore ? 1 : 0),
         itemBuilder: (context, index) {
+          if (index == _events.length) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: _isLoadingMore
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation(AppTheme.semanticBlue),
+                        ),
+                      )
+                    : TextButton(
+                        onPressed: _loadMoreEvents,
+                        child: const Text(
+                          'Load more events',
+                          style: TextStyle(color: AppTheme.semanticBlue),
+                        ),
+                      ),
+              ),
+            );
+          }
           final event = _events[index];
           return _TimelineEventCard(event: event);
         },
@@ -1089,10 +1145,10 @@ class _CultureScreenState extends State<CultureScreen> {
   }
 
   Widget _buildLoadingState() {
-    return const Center(
-      child: CircularProgressIndicator(
-        valueColor: AlwaysStoppedAnimation(AppTheme.neonMagenta),
-      ),
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: 4,
+      itemBuilder: (context, index) => const ShimmerPostCard(),
     );
   }
 

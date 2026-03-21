@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:timeago/timeago.dart' as timeago;
-import '../providers/app_state.dart';
+import '../providers/chat_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/design_system.dart';
+import '../widgets/shimmer_skeleton.dart';
 import '../models/models.dart';
 import 'chat_detail_screen.dart';
 import 'bot_intelligence_screen.dart';
@@ -34,8 +35,8 @@ class _DmScreenState extends State<DmScreen> {
   }
 
   Future<void> _loadBots() async {
-    final appState = context.read<AppState>();
-    final bots = await appState.loadBots();
+    final chatProvider = context.read<ChatProvider>();
+    final bots = await chatProvider.loadBots();
     setState(() {
       _allBots = bots;
       _isLoading = false;
@@ -61,11 +62,10 @@ class _DmScreenState extends State<DmScreen> {
             _buildSearchBar(),
             Expanded(
               child: _isLoading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation(AppTheme.semanticBlue),
-                      ),
+                  ? ListView.builder(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: 6,
+                      itemBuilder: (context, index) => const ShimmerConversationItem(),
                     )
                   : _buildContent(),
             ),
@@ -121,9 +121,9 @@ class _DmScreenState extends State<DmScreen> {
               ],
             ),
           ),
-          Consumer<AppState>(
-            builder: (context, appState, _) {
-              final totalUnread = appState.conversations.fold<int>(
+          Consumer<ChatProvider>(
+            builder: (context, chatProvider, _) {
+              final totalUnread = chatProvider.conversations.fold<int>(
                 0,
                 (sum, conv) => sum + conv.unreadCount,
               );
@@ -194,8 +194,8 @@ class _DmScreenState extends State<DmScreen> {
   }
 
   Widget _buildContent() {
-    return Consumer<AppState>(
-      builder: (context, appState, child) {
+    return Consumer<ChatProvider>(
+      builder: (context, chatProvider, child) {
         return RefreshIndicator(
           onRefresh: _loadBots,
           color: AppTheme.semanticBlue,
@@ -204,20 +204,20 @@ class _DmScreenState extends State<DmScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               // Recent conversations
-              if (appState.conversations.isNotEmpty) ...[
+              if (chatProvider.conversations.isNotEmpty) ...[
                 SliverToBoxAdapter(
-                  child: _buildSectionHeader('Recent', appState.conversations.length),
+                  child: _buildSectionHeader('Recent', chatProvider.conversations.length),
                 ),
                 SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
-                      final conv = appState.conversations[index];
+                      final conv = chatProvider.conversations[index];
                       return _ConversationTile(
                         conversation: conv,
                         onTap: () => _openChat(conv.otherUser.id, conv.otherUser.displayName),
                       );
                     },
-                    childCount: appState.conversations.length,
+                    childCount: chatProvider.conversations.length,
                   ),
                 ),
               ],

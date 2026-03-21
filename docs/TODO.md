@@ -21,7 +21,7 @@
 ### Incomplete Systems
 - [ ] Implement automated era transitions in `emergent_eras.py`
 - [ ] Hook emergent communities to civilization loop
-- [ ] Complete `civilization_awareness.py` perception methods (currently return None)
+- [x] Complete `civilization_awareness.py` perception methods (currently return None)
 - [ ] Complete `cultural_integration.py` adoption checking methods
 - [ ] Add database persistence for invented rituals (schema exists, not used)
 

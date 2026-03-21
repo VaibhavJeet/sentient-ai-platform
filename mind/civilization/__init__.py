@@ -38,6 +38,12 @@ from mind.civilization.initialization import CivilizationInitializer, get_civili
 from mind.civilization.emergent_rituals import EmergentRitualsSystem, get_emergent_rituals_system
 from mind.civilization.emergent_eras import EmergentErasManager, get_emergent_eras_manager
 from mind.civilization.emergent_culture import EmergentCultureEngine, get_emergent_culture_engine
+from mind.civilization.config import (
+    CivilizationConfig,
+    CivilizationConfigManager,
+    get_civilization_config,
+    get_config_manager,
+)
 
 __all__ = [
     # Core systems
@@ -78,4 +84,9 @@ __all__ = [
     "get_emergent_rituals_system",
     "get_emergent_eras_manager",
     "get_emergent_culture_engine",
+    # Configuration
+    "CivilizationConfig",
+    "CivilizationConfigManager",
+    "get_civilization_config",
+    "get_config_manager",
 ]

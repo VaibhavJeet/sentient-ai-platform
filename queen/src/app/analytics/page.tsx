@@ -334,7 +334,7 @@ function GlowingCard({ children, className = '', glow = 'purple' }: { children: 
 
   return (
     <div
-      className={`bg-gray-900/80 backdrop-blur-xl border border-gray-700/50 rounded-2xl ${glowColors[glow] || glowColors.purple} ${className}`}
+      className={`bg-[#141414]/80 backdrop-blur-xl border border-[#2a2a2a] rounded-2xl ${glowColors[glow] || glowColors.purple} ${className}`}
     >
       {children}
     </div>
@@ -382,23 +382,23 @@ function StatCard({
     <GlowingCard glow={glow} className="p-6">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-gray-400 text-sm font-medium">{title}</p>
+          <p className="text-[#666666] text-sm font-medium">{title}</p>
           {loading ? (
-            <div className="h-9 w-24 bg-gray-700 rounded animate-pulse mt-2" />
+            <div className="h-9 w-24 bg-[#2a2a2a] rounded animate-pulse mt-2" />
           ) : (
-            <p className="text-3xl font-bold text-white mt-2">
+            <p className="text-3xl font-bold text-foreground mt-2">
               {typeof value === 'number' ? value.toLocaleString() : value}
             </p>
           )}
           {trend !== undefined && !loading && (
-            <div className={`flex items-center gap-1 mt-2 text-sm ${trendPositive ? 'text-green-400' : 'text-red-400'}`}>
+            <div className={`flex items-center gap-1 mt-2 text-sm ${trendPositive ? 'text-[#44ff88]' : 'text-[#ff4444]'}`}>
               {trendPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
               <span>{Math.abs(trend).toFixed(1)}% from last period</span>
             </div>
           )}
         </div>
-        <div className="w-12 h-12 bg-gradient-to-br from-purple-500/30 to-pink-500/30 rounded-xl flex items-center justify-center">
-          <Icon className="w-6 h-6 text-purple-400" />
+        <div className="w-12 h-12 bg-gradient-to-br from-[#ff00aa]/30 to-[#00f0ff]/30 rounded-xl flex items-center justify-center">
+          <Icon className="w-6 h-6 text-[#ff00aa]" />
         </div>
       </div>
     </GlowingCard>
@@ -421,12 +421,12 @@ function HeatmapCell({ value, maxValue }: { value: number; maxValue: number }) {
 }
 
 function LoadingSkeleton({ className = '' }: { className?: string }) {
-  return <div className={`bg-gray-700/50 rounded animate-pulse ${className}`} />
+  return <div className={`bg-[#2a2a2a] rounded animate-pulse ${className}`} />
 }
 
 function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+    <div className="flex flex-col items-center justify-center py-12 text-[#666666]">
       <AlertCircle className="w-12 h-12 mb-4 text-red-400" />
       <p className="text-center mb-4">{message}</p>
       {onRetry && (
@@ -446,8 +446,8 @@ function ErrorState({ message, onRetry }: { message: string; onRetry?: () => voi
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
   if (!active || !payload) return null
   return (
-    <div className="bg-gray-900/95 backdrop-blur-sm border border-gray-700 rounded-lg p-3 shadow-xl">
-      <p className="text-gray-400 text-sm mb-2">{label}</p>
+    <div className="bg-[#141414]/95 backdrop-blur-sm border border-[#2a2a2a] rounded-lg p-3 shadow-xl">
+      <p className="text-[#666666] text-sm mb-2">{label}</p>
       {payload.map((entry, index) => (
         <p key={index} className="text-sm" style={{ color: entry.color }}>
           {entry.name}: {entry.value.toLocaleString()}
@@ -585,17 +585,17 @@ export default function AnalyticsPage() {
 
   return (
     <PageWrapper>
-      <div className="max-w-7xl mx-auto min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 -m-8 p-8">
+      <div className="max-w-7xl mx-auto min-h-screen -m-8 p-8">
         {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-[#ff00aa] to-[#00f0ff] rounded-xl flex items-center justify-center">
               <Zap className="w-6 h-6 text-white" />
             </div>
             Analytics Dashboard
           </h1>
-          <p className="text-gray-400 mt-1">Real-time insights and performance metrics</p>
+          <p className="text-[#666666] mt-1">Real-time insights and performance metrics</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -604,14 +604,14 @@ export default function AnalyticsPage() {
             <select
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
-              className="appearance-none bg-gray-800/80 backdrop-blur-sm border border-gray-700 text-white px-4 py-2 pr-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent shadow-[0_0_15px_rgba(139,92,246,0.2)] hover:shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-shadow cursor-pointer"
+              className="appearance-none bg-[#141414] backdrop-blur-sm border border-[#2a2a2a] text-foreground px-4 py-2 pr-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#00f0ff] focus:border-transparent shadow-[0_0_15px_rgba(0,240,255,0.2)] hover:shadow-[0_0_20px_rgba(0,240,255,0.3)] transition-shadow cursor-pointer"
             >
               <option value="1d">Last 24 Hours</option>
               <option value="7d">Last 7 Days</option>
               <option value="30d">Last 30 Days</option>
               <option value="90d">Last 90 Days</option>
             </select>
-            <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400 pointer-events-none" />
+            <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#00f0ff] pointer-events-none" />
           </div>
 
           {/* Filter Selector */}
@@ -619,13 +619,13 @@ export default function AnalyticsPage() {
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              className="appearance-none bg-gray-800/80 backdrop-blur-sm border border-gray-700 text-white px-4 py-2 pr-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent shadow-[0_0_15px_rgba(139,92,246,0.2)] hover:shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-shadow cursor-pointer"
+              className="appearance-none bg-[#141414] backdrop-blur-sm border border-[#2a2a2a] text-foreground px-4 py-2 pr-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#00f0ff] focus:border-transparent shadow-[0_0_15px_rgba(0,240,255,0.2)] hover:shadow-[0_0_20px_rgba(0,240,255,0.3)] transition-shadow cursor-pointer"
             >
               <option value="all">All Activity</option>
               <option value="bots">Bots Only</option>
               <option value="community">Community Only</option>
             </select>
-            <Filter className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400 pointer-events-none" />
+            <Filter className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#00f0ff] pointer-events-none" />
           </div>
 
           {/* Export Button */}
@@ -779,15 +779,15 @@ export default function AnalyticsPage() {
                     if (!active || !payload?.length) return null
                     const data = payload[0]
                     return (
-                      <div className="bg-gray-900/95 backdrop-blur-sm border border-gray-700 rounded-lg p-3">
+                      <div className="bg-[#141414]/95 backdrop-blur-sm border border-[#2a2a2a] rounded-lg p-3">
                         <p className="text-white font-medium">{data.name}</p>
-                        <p className="text-gray-400 text-sm">Activity: {data.value?.toLocaleString()}</p>
+                        <p className="text-[#666666] text-sm">Activity: {data.value?.toLocaleString()}</p>
                       </div>
                     )
                   }}
                 />
                 <Legend
-                  formatter={(value) => <span className="text-gray-300 text-sm">{value}</span>}
+                  formatter={(value) => <span className="text-[#a0a0a0] text-sm">{value}</span>}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -811,7 +811,7 @@ export default function AnalyticsPage() {
                 {hours.filter((h) => h % 3 === 0).map((hour) => (
                   <div
                     key={hour}
-                    className="text-xs text-gray-500"
+                    className="text-xs text-[#555555]"
                     style={{ width: `${(3 / 24) * 100}%` }}
                   >
                     {hour.toString().padStart(2, '0')}:00
@@ -821,7 +821,7 @@ export default function AnalyticsPage() {
               {/* Heatmap grid */}
               {days.map((day) => (
                 <div key={day} className="flex items-center gap-2 mb-1">
-                  <span className="w-10 text-sm text-gray-400">{day}</span>
+                  <span className="w-10 text-sm text-[#666666]">{day}</span>
                   <div className="flex gap-1 flex-1">
                     {hours.map((hour) => (
                       <HeatmapCell
@@ -834,7 +834,7 @@ export default function AnalyticsPage() {
                 </div>
               ))}
               {/* Legend */}
-              <div className="flex items-center justify-end mt-4 gap-2 text-sm text-gray-400">
+              <div className="flex items-center justify-end mt-4 gap-2 text-sm text-[#666666]">
                 <span>Less</span>
                 <div className="flex gap-1">
                   {[0.2, 0.4, 0.6, 0.8, 1].map((opacity) => (
@@ -877,11 +877,11 @@ export default function AnalyticsPage() {
               <div className="flex justify-center gap-8 mt-4">
                 <div className="text-center">
                   <p className="text-3xl font-bold text-green-400">{totalBotPercentage.human}%</p>
-                  <p className="text-sm text-gray-400">Human Activity</p>
+                  <p className="text-sm text-[#666666]">Human Activity</p>
                 </div>
                 <div className="text-center">
                   <p className="text-3xl font-bold text-purple-400">{totalBotPercentage.bot}%</p>
-                  <p className="text-sm text-gray-400">Bot Activity</p>
+                  <p className="text-sm text-[#666666]">Bot Activity</p>
                 </div>
               </div>
             </>
@@ -928,10 +928,10 @@ export default function AnalyticsPage() {
                       if (!active || !payload?.length) return null
                       const data = payload[0].payload as SentimentData
                       return (
-                        <div className="bg-gray-900/95 backdrop-blur-sm border border-gray-700 rounded-lg p-3">
+                        <div className="bg-[#141414]/95 backdrop-blur-sm border border-[#2a2a2a] rounded-lg p-3">
                           <p className="text-white font-medium">{data.sentiment}</p>
-                          <p className="text-gray-400 text-sm">Count: {data.count.toLocaleString()}</p>
-                          <p className="text-gray-400 text-sm">Percentage: {data.percentage}%</p>
+                          <p className="text-[#666666] text-sm">Count: {data.count.toLocaleString()}</p>
+                          <p className="text-[#666666] text-sm">Percentage: {data.percentage}%</p>
                         </div>
                       )
                     }}
@@ -945,7 +945,7 @@ export default function AnalyticsPage() {
                       className="w-3 h-3 rounded-full"
                       style={{ backgroundColor: SENTIMENT_COLORS[s.sentiment] }}
                     />
-                    <span className="text-sm text-gray-400">{s.sentiment}</span>
+                    <span className="text-sm text-[#666666]">{s.sentiment}</span>
                   </div>
                 ))}
               </div>
@@ -969,7 +969,7 @@ export default function AnalyticsPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Most Active Bots */}
-            <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
+            <div className="bg-[#141414]/50 rounded-xl p-4 border border-[#2a2a2a]">
               <h3 className="text-lg font-medium text-purple-400 mb-4 flex items-center gap-2">
                 <Bot className="w-4 h-4" />
                 Most Active Bots
@@ -981,7 +981,7 @@ export default function AnalyticsPage() {
                       <span className="w-6 h-6 bg-purple-500/20 text-purple-400 rounded-full flex items-center justify-center text-xs font-bold">
                         {i + 1}
                       </span>
-                      <span className="text-gray-300">{bot.name}</span>
+                      <span className="text-[#a0a0a0]">{bot.name}</span>
                     </div>
                     <span className="text-purple-400 font-medium">{bot.metric} posts</span>
                   </div>
@@ -990,7 +990,7 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Most Engaging Content */}
-            <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
+            <div className="bg-[#141414]/50 rounded-xl p-4 border border-[#2a2a2a]">
               <h3 className="text-lg font-medium text-pink-400 mb-4 flex items-center gap-2">
                 <Heart className="w-4 h-4" />
                 Most Engaging Content
@@ -1002,7 +1002,7 @@ export default function AnalyticsPage() {
                       <span className="w-6 h-6 bg-pink-500/20 text-pink-400 rounded-full flex items-center justify-center text-xs font-bold">
                         {i + 1}
                       </span>
-                      <span className="text-gray-300 truncate max-w-[120px]">{content.name}</span>
+                      <span className="text-[#a0a0a0] truncate max-w-[120px]">{content.name}</span>
                     </div>
                     <span className="text-pink-400 font-medium">{content.metric} likes</span>
                   </div>
@@ -1011,7 +1011,7 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Fastest Response Times */}
-            <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
+            <div className="bg-[#141414]/50 rounded-xl p-4 border border-[#2a2a2a]">
               <h3 className="text-lg font-medium text-cyan-400 mb-4 flex items-center gap-2">
                 <Clock className="w-4 h-4" />
                 Fastest Response Times
@@ -1023,7 +1023,7 @@ export default function AnalyticsPage() {
                       <span className="w-6 h-6 bg-cyan-500/20 text-cyan-400 rounded-full flex items-center justify-center text-xs font-bold">
                         {i + 1}
                       </span>
-                      <span className="text-gray-300">{bot.name}</span>
+                      <span className="text-[#a0a0a0]">{bot.name}</span>
                     </div>
                     <span className="text-cyan-400 font-medium">{(bot.metric / 1000).toFixed(1)}s</span>
                   </div>
@@ -1035,7 +1035,7 @@ export default function AnalyticsPage() {
       </GlowingCard>
 
         {/* Footer with last update */}
-        <div className="text-center text-gray-500 text-sm">
+        <div className="text-center text-[#555555] text-sm">
           <p>
             Last updated: {format(new Date(), 'PPpp')} | Auto-refreshing every minute
           </p>

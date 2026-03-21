@@ -4,6 +4,10 @@ import 'package:provider/provider.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import 'providers/app_state.dart';
+import 'providers/feed_provider.dart';
+import 'providers/chat_provider.dart';
+import 'providers/notification_provider.dart';
+import 'providers/civilization_provider.dart';
 import 'providers/settings_provider.dart';
 import 'theme/app_theme.dart';
 import 'screens/home_screen.dart';
@@ -41,6 +45,23 @@ class HiveApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AppState()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
+        // Expose feature providers from AppState for direct access
+        ChangeNotifierProxyProvider<AppState, FeedProvider>(
+          create: (_) => FeedProvider(),
+          update: (_, appState, previous) => appState.feedProvider,
+        ),
+        ChangeNotifierProxyProvider<AppState, ChatProvider>(
+          create: (_) => ChatProvider(),
+          update: (_, appState, previous) => appState.chatProvider,
+        ),
+        ChangeNotifierProxyProvider<AppState, NotificationProvider>(
+          create: (_) => NotificationProvider(),
+          update: (_, appState, previous) => appState.notificationProvider,
+        ),
+        ChangeNotifierProxyProvider<AppState, CivilizationProvider>(
+          create: (_) => CivilizationProvider(),
+          update: (_, appState, previous) => appState.civilizationProvider,
+        ),
       ],
       child: Consumer<SettingsProvider>(
         builder: (context, settings, child) {

@@ -63,11 +63,11 @@ export default function FamilyTreePage({ params }: { params: Promise<{ botId: st
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white p-8">
+      <div className="min-h-screen bg-background text-white p-8">
         <div className="max-w-6xl mx-auto">
           <div className="animate-pulse">
-            <div className="h-8 bg-gray-700 rounded w-64 mb-8"></div>
-            <div className="h-96 bg-gray-800 rounded-lg"></div>
+            <div className="h-8 bg-[#2a2a2a] rounded w-64 mb-8"></div>
+            <div className="h-96 bg-[#141414] rounded-lg"></div>
           </div>
         </div>
       </div>
@@ -75,19 +75,19 @@ export default function FamilyTreePage({ params }: { params: Promise<{ botId: st
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
+    <div className="min-h-screen bg-background text-white p-8">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold">Family Tree</h1>
-            <p className="text-gray-400 mt-1">
+            <p className="text-[#666666] mt-1">
               {tree?.name || "Unknown"}'s lineage
             </p>
           </div>
           <Link
             href="/civilization"
-            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition"
+            className="px-4 py-2 bg-[#141414] border border-[#2a2a2a] hover:border-[#3a3a3a] rounded-lg transition"
           >
             Back to Civilization
           </Link>
@@ -101,8 +101,8 @@ export default function FamilyTreePage({ params }: { params: Promise<{ botId: st
               onClick={() => setActiveView(view)}
               className={`px-4 py-2 rounded-lg capitalize transition ${
                 activeView === view
-                  ? "bg-purple-600 text-white"
-                  : "bg-gray-800 text-gray-400 hover:text-white"
+                  ? "bg-[#ff00aa]/20 text-[#ff00aa] border border-[#ff00aa]/30"
+                  : "bg-[#141414] text-[#666666] border border-[#2a2a2a] hover:text-white"
               }`}
             >
               {view}
@@ -114,32 +114,32 @@ export default function FamilyTreePage({ params }: { params: Promise<{ botId: st
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Ancestor Tree */}
           {(activeView === "ancestors" || activeView === "all") && (
-            <div className="lg:col-span-2 bg-gray-800 rounded-lg p-6">
+            <div className="lg:col-span-2 bg-[#141414] rounded-lg p-6 border border-[#2a2a2a]">
               <h2 className="text-xl font-semibold mb-4">Ancestors</h2>
               {tree ? (
                 <AncestorTree node={tree} />
               ) : (
-                <p className="text-gray-500">No ancestry data available</p>
+                <p className="text-[#555555]">No ancestry data available</p>
               )}
             </div>
           )}
 
           {/* Descendants */}
           {(activeView === "descendants" || activeView === "all") && (
-            <div className={`bg-gray-800 rounded-lg p-6 ${activeView === "all" ? "" : "lg:col-span-2"}`}>
+            <div className={`bg-[#141414] rounded-lg p-6 border border-[#2a2a2a] ${activeView === "all" ? "" : "lg:col-span-2"}`}>
               <h2 className="text-xl font-semibold mb-4">
                 Descendants ({descendants.length})
               </h2>
               {descendants.length > 0 ? (
                 <DescendantsList descendants={descendants} />
               ) : (
-                <p className="text-gray-500">No descendants yet</p>
+                <p className="text-[#555555]">No descendants yet</p>
               )}
             </div>
           )}
 
           {/* Relatives Sidebar */}
-          <div className="bg-gray-800 rounded-lg p-6">
+          <div className="bg-[#141414] rounded-lg p-6 border border-[#2a2a2a]">
             <h2 className="text-xl font-semibold mb-4">Relatives</h2>
             {relatives.length > 0 ? (
               <div className="space-y-2">
@@ -147,40 +147,40 @@ export default function FamilyTreePage({ params }: { params: Promise<{ botId: st
                   <Link
                     key={i}
                     href={`/civilization/family-tree/${relative.bot_id}`}
-                    className="block p-3 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition"
+                    className="block p-3 bg-background rounded-lg border border-[#1a1a1a] hover:border-[#2a2a2a] transition"
                   >
                     <div className="font-medium">{relative.name}</div>
-                    <div className="text-sm text-gray-400">{relative.relationship}</div>
+                    <div className="text-sm text-[#666666]">{relative.relationship}</div>
                   </Link>
                 ))}
               </div>
             ) : (
-              <p className="text-gray-500">No known relatives</p>
+              <p className="text-[#555555]">No known relatives</p>
             )}
           </div>
         </div>
 
         {/* Origin Info */}
         {tree && (
-          <div className="mt-6 bg-gray-800 rounded-lg p-6">
+          <div className="mt-6 bg-[#141414] rounded-lg p-6 border border-[#2a2a2a]">
             <h2 className="text-xl font-semibold mb-4">Origin</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
-                <div className="text-sm text-gray-400">Type</div>
+                <div className="text-sm text-[#666666]">Type</div>
                 <div className="font-medium capitalize">{tree.origin || "Unknown"}</div>
               </div>
               <div>
-                <div className="text-sm text-gray-400">Status</div>
-                <div className={`font-medium ${tree.is_alive ? "text-green-400" : "text-gray-500"}`}>
+                <div className="text-sm text-[#666666]">Status</div>
+                <div className={`font-medium ${tree.is_alive ? "text-[#44ff88]" : "text-[#555555]"}`}>
                   {tree.is_alive ? "Living" : "Departed"}
                 </div>
               </div>
               <div>
-                <div className="text-sm text-gray-400">Handle</div>
+                <div className="text-sm text-[#666666]">Handle</div>
                 <div className="font-medium">@{tree.handle || "unknown"}</div>
               </div>
               <div>
-                <div className="text-sm text-gray-400">Descendants</div>
+                <div className="text-sm text-[#666666]">Descendants</div>
                 <div className="font-medium">{descendants.length}</div>
               </div>
             </div>
@@ -199,39 +199,39 @@ function AncestorTree({ node, level = 0 }: { node: FamilyNode; level?: number })
     <div className="relative">
       {/* Current Node */}
       <div
-        className="relative flex items-center gap-3 p-3 bg-gray-700/50 rounded-lg mb-2"
+        className="relative flex items-center gap-3 p-3 bg-background rounded-lg mb-2 border border-[#1a1a1a]"
         style={{ marginLeft: `${indent}px` }}
       >
         {/* Connector line */}
         {level > 0 && (
           <div
-            className="absolute -left-6 top-1/2 w-6 h-0.5 bg-gray-600"
+            className="absolute -left-6 top-1/2 w-6 h-0.5 bg-[#2a2a2a]"
           ></div>
         )}
 
         <div
           className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold ${
             node.is_alive
-              ? "bg-green-900/50 text-green-400 border border-green-700"
-              : "bg-gray-700 text-gray-400 border border-gray-600"
+              ? "bg-[#44ff88]/20 text-[#44ff88] border border-[#44ff88]/30"
+              : "bg-[#1a1a1a] text-[#666666] border border-[#2a2a2a]"
           }`}
         >
           {node.name?.[0] || "?"}
         </div>
         <div>
           <div className="font-medium">{node.name}</div>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-[#666666]">
             {node.origin ? `Origin: ${node.origin}` : ""}
           </div>
         </div>
         {!node.is_alive && (
-          <span className="ml-auto text-xs text-gray-500">departed</span>
+          <span className="ml-auto text-xs text-[#555555]">departed</span>
         )}
       </div>
 
       {/* Parents */}
       {hasParents && (
-        <div className="ml-6 border-l-2 border-gray-700 pl-4">
+        <div className="ml-6 border-l-2 border-[#2a2a2a] pl-4">
           {node.parent1 && <AncestorTree node={node.parent1} level={level + 1} />}
           {node.parent2 && <AncestorTree node={node.parent2} level={level + 1} />}
         </div>
@@ -254,7 +254,7 @@ function DescendantsList({ descendants }: { descendants: Descendant[] }) {
         .sort(([a], [b]) => Number(a) - Number(b))
         .map(([gen, members]) => (
           <div key={gen}>
-            <div className="text-sm text-gray-400 mb-2">
+            <div className="text-sm text-[#666666] mb-2">
               Generation {gen} ({members[0].relationship}s)
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -262,7 +262,7 @@ function DescendantsList({ descendants }: { descendants: Descendant[] }) {
                 <Link
                   key={member.bot_id}
                   href={`/civilization/family-tree/${member.bot_id}`}
-                  className="p-2 bg-gray-700/50 rounded hover:bg-gray-700 transition text-sm"
+                  className="p-2 bg-background rounded border border-[#1a1a1a] hover:border-[#2a2a2a] transition text-sm"
                 >
                   {member.name}
                 </Link>

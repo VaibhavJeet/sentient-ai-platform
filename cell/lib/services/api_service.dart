@@ -402,8 +402,11 @@ class ApiService {
     );
   }
 
-  Future<List<BotProfile>> getBots({String? communityId, int limit = 50}) async {
-    final params = {'limit': limit.toString()};
+  Future<List<BotProfile>> getBots({String? communityId, int limit = 50, int offset = 0}) async {
+    final params = {
+      'limit': limit.toString(),
+      'offset': offset.toString(),
+    };
     if (communityId != null) params['community_id'] = communityId;
 
     final uri = Uri.parse('$baseUrl/users/bots').replace(queryParameters: params);
@@ -551,8 +554,11 @@ class ApiService {
     throw Exception('Failed to load current era: ${response.body}');
   }
 
-  Future<List<dynamic>> getCivilizationTimeline({int limit = 50}) async {
-    final params = {'limit': limit.toString()};
+  Future<List<dynamic>> getCivilizationTimeline({int limit = 50, int offset = 0}) async {
+    final params = {
+      'limit': limit.toString(),
+      'offset': offset.toString(),
+    };
     final uri = Uri.parse('$baseUrl/civilization/timeline').replace(queryParameters: params);
     final response = await _client.get(uri);
 

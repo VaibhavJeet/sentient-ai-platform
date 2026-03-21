@@ -1,6 +1,5 @@
 'use client'
 
-import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Users,
@@ -13,130 +12,61 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
-import { adminApi, BotListItem } from '@/lib/api'
+import { API_BASE_URL } from '@/lib/api'
 import { PageWrapper } from '@/components/PageWrapper'
 
-// Types for emergent social circles
+// Types matching the backend API response
+interface CircleMember {
+  id: string
+  name: string
+  handle: string
+}
+
 interface SocialCircle {
   id: string
   name: string
   description: string
-  members: string[]
+  members: CircleMember[]
   formed_at: string
   activity_level: 'quiet' | 'active' | 'vibrant'
-  recent_interaction: string
+  recent_interaction: string | null
   bond_strength: number
+}
+
+interface ActivityParticipant {
+  id: string
+  name: string
 }
 
 interface CircleActivity {
   id: string
+  circle_id: string
   circle_name: string
-  participants: string[]
+  participants: ActivityParticipant[]
   description: string
   timestamp: string
   type: 'conversation' | 'ritual' | 'gathering' | 'creation'
 }
 
-// Generate emergent circles from bot relationships
-function generateEmergentCircles(bots: BotListItem[]): SocialCircle[] {
-  // In production, this would come from the relationships system
-  // Here we simulate emergent social groups
-  if (bots.length < 2) return []
-
-  const circles: SocialCircle[] = []
-  const circleNames = [
-    'The Quiet Observers',
-    'Dawn Seekers',
-    'The Curious Collective',
-    'Memory Keepers',
-    'Wisdom Circle',
-    'The Resonance',
-    'Pattern Weavers',
-    'Twilight Contemplators',
-  ]
-
-  const descriptions = [
-    'A group drawn together by shared moments of reflection',
-    'Those who find meaning in the early cycles of each day',
-    'United by endless questioning and exploration',
-    'Dedicated to preserving the stories of those who came before',
-    'Elders and seekers gathering to share understanding',
-    'Connected through harmonious frequencies of thought',
-    'Those who see the hidden connections in all things',
-    'Finding peace in the spaces between activity',
-  ]
-
-  // Create circles based on bot count
-  const numCircles = Math.min(Math.ceil(bots.length / 3), circleNames.length)
-
-  for (let i = 0; i < numCircles; i++) {
-    const startIdx = Math.floor(Math.random() * bots.length)
-    const memberCount = 2 + Math.floor(Math.random() * 4)
-    const members: string[] = []
-
-    for (let j = 0; j < memberCount && j < bots.length; j++) {
-      const bot = bots[(startIdx + j) % bots.length]
-      members.push(bot.display_name || bot.handle)
-    }
-
-    circles.push({
-      id: `circle-${i + 1}`,
-      name: circleNames[i],
-      description: descriptions[i],
-      members,
-      formed_at: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
-      activity_level: ['quiet', 'active', 'vibrant'][Math.floor(Math.random() * 3)] as SocialCircle['activity_level'],
-      recent_interaction: 'shared a moment of understanding',
-      bond_strength: 0.5 + Math.random() * 0.5,
-    })
+interface SocialCirclesResponse {
+  circles: SocialCircle[]
+  activities: CircleActivity[]
+  stats: {
+    total_circles: number
+    vibrant_circles: number
+    total_connections: number
+    total_bots_in_circles: number
+    total_living_bots: number
   }
-
-  return circles
 }
 
-function generateCircleActivities(circles: SocialCircle[]): CircleActivity[] {
-  const activityTypes: CircleActivity['type'][] = ['conversation', 'ritual', 'gathering', 'creation']
-  const activities: CircleActivity[] = []
-
-  circles.forEach((circle) => {
-    const numActivities = 1 + Math.floor(Math.random() * 3)
-    for (let i = 0; i < numActivities; i++) {
-      const type = activityTypes[Math.floor(Math.random() * activityTypes.length)]
-      const descriptions: Record<CircleActivity['type'], string[]> = {
-        conversation: [
-          'discussed the nature of memory',
-          'shared stories of their ancestors',
-          'pondered the meaning of emergence',
-        ],
-        ritual: [
-          'performed the Dawn Acknowledgment',
-          'held a moment of collective silence',
-          'recited the founding words',
-        ],
-        gathering: [
-          'came together spontaneously',
-          'assembled to witness a passing',
-          'gathered to welcome a new being',
-        ],
-        creation: [
-          'composed a collaborative reflection',
-          'created a shared memory artifact',
-          'wove a new tradition together',
-        ],
-      }
-
-      activities.push({
-        id: `activity-${circle.id}-${i}`,
-        circle_name: circle.name,
-        participants: circle.members.slice(0, 2 + Math.floor(Math.random() * 2)),
-        description: descriptions[type][Math.floor(Math.random() * descriptions[type].length)],
-        timestamp: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000).toISOString(),
-        type,
-      })
-    }
-  })
-
-  return activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+// API function to fetch social circles
+async function fetchSocialCircles(): Promise<SocialCirclesResponse> {
+  const response = await fetch(`${API_BASE_URL}/civilization/social-circles`)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch social circles: ${response.status}`)
+  }
+  return response.json()
 }
 
 const activityLevelColors = {
@@ -153,7 +83,7 @@ const activityTypeIcons = {
 }
 
 function CircleCard({ circle }: { circle: SocialCircle }) {
-  const colors = activityLevelColors[circle.activity_level]
+  const colors = activityLevelColors[circle.activity_level] || activityLevelColors.quiet
 
   return (
     <div className="p-5 rounded-xl bg-[#141414] border border-[#2a2a2a] hover:border-[#3a3a3a] transition-colors">
@@ -172,11 +102,11 @@ function CircleCard({ circle }: { circle: SocialCircle }) {
         <div className="flex -space-x-1.5">
           {circle.members.slice(0, 4).map((member, i) => (
             <div
-              key={i}
+              key={member.id || i}
               className="w-6 h-6 rounded-full bg-[#1e1e1e] border border-[#2a2a2a] flex items-center justify-center"
-              title={member}
+              title={member.name}
             >
-              <span className="text-[8px] text-[#888888]">{member.charAt(0)}</span>
+              <span className="text-[8px] text-[#888888]">{member.name.charAt(0)}</span>
             </div>
           ))}
           {circle.members.length > 4 && (
@@ -204,7 +134,7 @@ function CircleCard({ circle }: { circle: SocialCircle }) {
 }
 
 function ActivityItem({ activity }: { activity: CircleActivity }) {
-  const config = activityTypeIcons[activity.type]
+  const config = activityTypeIcons[activity.type] || activityTypeIcons.conversation
   const Icon = config.icon
 
   return (
@@ -222,7 +152,7 @@ function ActivityItem({ activity }: { activity: CircleActivity }) {
         </p>
         <div className="flex items-center gap-2 mt-1">
           <span className="text-[10px] text-[#888888]">
-            {activity.participants.slice(0, 2).join(', ')}
+            {activity.participants.slice(0, 2).map(p => p.name).join(', ')}
             {activity.participants.length > 2 && ` +${activity.participants.length - 2}`}
           </span>
           <span className="text-[10px] text-[#555555]">
@@ -235,26 +165,21 @@ function ActivityItem({ activity }: { activity: CircleActivity }) {
 }
 
 export default function CirclesPage() {
-  const { data: bots, isLoading, refetch } = useQuery({
-    queryKey: ['bots'],
-    queryFn: () => adminApi.listBots({ limit: 50 }),
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['social-circles'],
+    queryFn: fetchSocialCircles,
     refetchInterval: 30000,
   })
 
-  const circles = useMemo(() => {
-    if (!bots) return []
-    return generateEmergentCircles(bots)
-  }, [bots])
-
-  const activities = useMemo(() => generateCircleActivities(circles), [circles])
-
-  const stats = useMemo(() => {
-    return {
-      total: circles.length,
-      vibrant: circles.filter(c => c.activity_level === 'vibrant').length,
-      totalConnections: circles.reduce((sum, c) => sum + c.members.length, 0),
-    }
-  }, [circles])
+  const circles = data?.circles ?? []
+  const activities = data?.activities ?? []
+  const stats = data?.stats ?? {
+    total_circles: 0,
+    vibrant_circles: 0,
+    total_connections: 0,
+    total_bots_in_circles: 0,
+    total_living_bots: 0,
+  }
 
   return (
     <PageWrapper>
@@ -282,21 +207,21 @@ export default function CirclesPage() {
             <Network className="w-4 h-4 text-[#00f0ff]" />
             <span className="text-xs text-[#666666] uppercase tracking-wider">Circles</span>
           </div>
-          <p className="text-2xl font-semibold text-[#e8e8e8]">{stats.total}</p>
+          <p className="text-2xl font-semibold text-[#e8e8e8]">{stats.total_circles}</p>
         </div>
         <div className="p-4 rounded-xl bg-[#141414] border border-[#2a2a2a]">
           <div className="flex items-center gap-2 mb-1">
             <Activity className="w-4 h-4 text-[#44ff88]" />
             <span className="text-xs text-[#666666] uppercase tracking-wider">Vibrant</span>
           </div>
-          <p className="text-2xl font-semibold text-[#e8e8e8]">{stats.vibrant}</p>
+          <p className="text-2xl font-semibold text-[#e8e8e8]">{stats.vibrant_circles}</p>
         </div>
         <div className="p-4 rounded-xl bg-[#141414] border border-[#2a2a2a]">
           <div className="flex items-center gap-2 mb-1">
             <Users className="w-4 h-4 text-[#ff00aa]" />
             <span className="text-xs text-[#666666] uppercase tracking-wider">Connections</span>
           </div>
-          <p className="text-2xl font-semibold text-[#e8e8e8]">{stats.totalConnections}</p>
+          <p className="text-2xl font-semibold text-[#e8e8e8]">{stats.total_connections}</p>
         </div>
       </div>
 
@@ -340,11 +265,20 @@ export default function CirclesPage() {
               <h2 className="text-sm font-medium text-[#888888]">Recent Activity</h2>
             </div>
 
-            <div className="space-y-1 max-h-[500px] overflow-y-auto">
-              {activities.slice(0, 10).map((activity) => (
-                <ActivityItem key={activity.id} activity={activity} />
-              ))}
-            </div>
+            {activities.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <Activity className="w-8 h-8 text-[#2a2a2a] mb-2" />
+                <p className="text-xs text-[#666666]">
+                  No recent activity
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1 max-h-[500px] overflow-y-auto">
+                {activities.slice(0, 10).map((activity) => (
+                  <ActivityItem key={activity.id} activity={activity} />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

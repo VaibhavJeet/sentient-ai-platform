@@ -18,25 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mind.core.database import async_session_factory, BotProfileDB
 from mind.civilization.models import BotLifecycleDB, BotAncestryDB, CulturalArtifactDB
+from mind.civilization.config import get_civilization_config, CivilizationConfig
 
 logger = logging.getLogger(__name__)
-
-
-# Life stage thresholds (in virtual days)
-LIFE_STAGES = {
-    "young": (0, 365),           # First virtual year
-    "mature": (365, 1825),       # Years 1-5
-    "elder": (1825, 3650),       # Years 5-10
-    "ancient": (3650, float('inf'))  # 10+ years
-}
-
-# Age affects vitality
-VITALITY_DECAY = {
-    "young": 0.0,      # No decay
-    "mature": 0.001,   # Slow decay per day
-    "elder": 0.003,    # Moderate decay
-    "ancient": 0.008   # Faster decay
-}
 
 
 class LifecycleManager:
@@ -53,16 +37,38 @@ class LifecycleManager:
 
     def __init__(
         self,
-        time_scale: float = 7.0,  # 1 real day = 7 virtual days by default
+        time_scale: Optional[float] = None,  # If None, loaded from config
         demo_mode: bool = False
     ):
-        self.time_scale = time_scale
+        self._time_scale_override = time_scale
         self.demo_mode = demo_mode  # Faster aging for testing
-        if demo_mode:
-            self.time_scale = 365.0  # 1 real day = 1 virtual year
+        self._config: Optional[CivilizationConfig] = None
 
         self._current_generation = 1
         self._current_era = "founding"
+
+    async def _get_config(self) -> CivilizationConfig:
+        """Get or refresh the civilization configuration."""
+        if self._config is None:
+            self._config = await get_civilization_config()
+        return self._config
+
+    @property
+    def time_scale(self) -> float:
+        """Get the time scale (synchronous access with cached config)."""
+        if self._time_scale_override is not None:
+            return self._time_scale_override
+        if self._config is not None:
+            return self._config.demo_time_scale if self.demo_mode else self._config.time_scale
+        # Fallback defaults
+        return 365.0 if self.demo_mode else 7.0
+
+    async def get_time_scale(self) -> float:
+        """Get the time scale (async with config refresh)."""
+        if self._time_scale_override is not None:
+            return self._time_scale_override
+        config = await self._get_config()
+        return config.demo_time_scale if self.demo_mode else config.time_scale
 
     async def initialize_bot_lifecycle(
         self,
@@ -146,7 +152,10 @@ class LifecycleManager:
 
         Returns stats about aging: {"aged": n, "stage_changed": n, "died": n}
         """
-        virtual_days = (real_hours_elapsed / 24) * self.time_scale
+        # Load config for this aging cycle
+        config = await self._get_config()
+        current_time_scale = await self.get_time_scale()
+        virtual_days = (real_hours_elapsed / 24) * current_time_scale
 
         stats = {"aged": 0, "stage_changed": 0, "died": 0}
 
@@ -162,8 +171,8 @@ class LifecycleManager:
                 lifecycle.virtual_age_days += int(virtual_days)
                 lifecycle.last_aged = datetime.utcnow()
 
-                # Update life stage
-                new_stage = self._determine_life_stage(lifecycle.virtual_age_days)
+                # Update life stage using config
+                new_stage = config.get_life_stage(lifecycle.virtual_age_days)
                 if new_stage != old_stage:
                     lifecycle.life_stage = new_stage
                     lifecycle.life_events.append({
@@ -175,8 +184,8 @@ class LifecycleManager:
                     stats["stage_changed"] += 1
                     logger.info(f"[LIFECYCLE] Bot {lifecycle.bot_id} entered {new_stage} stage")
 
-                # Apply vitality decay
-                decay_rate = VITALITY_DECAY.get(new_stage, 0.001)
+                # Apply vitality decay using config
+                decay_rate = config.get_vitality_decay(new_stage)
                 lifecycle.vitality = max(0.0, lifecycle.vitality - (decay_rate * virtual_days))
 
                 # Check for natural death
@@ -190,12 +199,10 @@ class LifecycleManager:
 
         return stats
 
-    def _determine_life_stage(self, virtual_age_days: int) -> str:
+    async def _determine_life_stage(self, virtual_age_days: int) -> str:
         """Determine life stage based on virtual age."""
-        for stage, (min_days, max_days) in LIFE_STAGES.items():
-            if min_days <= virtual_age_days < max_days:
-                return stage
-        return "ancient"
+        config = await self._get_config()
+        return config.get_life_stage(virtual_age_days)
 
     async def _should_die_naturally(self, lifecycle: BotLifecycleDB) -> bool:
         """

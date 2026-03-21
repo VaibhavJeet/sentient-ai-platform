@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import {
   Settings,
   Globe,
@@ -19,10 +19,21 @@ import {
   EyeOff,
   ChevronDown,
   ChevronRight,
+  Loader2,
+  X,
 } from 'lucide-react'
 import { GlowCard } from '@/components/ui/GlowCard'
 import { NeonButton } from '@/components/ui/NeonButton'
 import { PageWrapper } from '@/components/PageWrapper'
+import {
+  settingsApi,
+  type AllSettings,
+  type GeneralSettings,
+  type BotSettings,
+  type AuthSettings,
+  type ModerationSettings,
+  type NotificationSettings,
+} from '@/lib/api'
 
 // Types
 interface ToggleSwitchProps {
@@ -175,6 +186,7 @@ function NeonSlider({
   step = 1,
   unit = '',
   color = 'cyan',
+  disabled = false,
 }: {
   label: string
   value: number
@@ -184,6 +196,7 @@ function NeonSlider({
   step?: number
   unit?: string
   color?: 'cyan' | 'magenta' | 'green' | 'amber'
+  disabled?: boolean
 }) {
   const colorMap = {
     cyan: { active: '#00f0ff', glow: 'rgba(0, 240, 255, 0.5)' },
@@ -195,7 +208,7 @@ function NeonSlider({
   const percentage = ((value - min) / (max - min)) * 100
 
   return (
-    <div className="space-y-2">
+    <div className={`space-y-2 ${disabled ? 'opacity-50' : ''}`}>
       <div className="flex items-center justify-between">
         <label className="text-xs text-[#a0a0b0] font-mono uppercase tracking-wider">{label}</label>
         <span
@@ -221,7 +234,8 @@ function NeonSlider({
           step={step}
           value={value}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          disabled={disabled}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
         />
       </div>
       <div className="flex justify-between text-xs text-[#606080] font-mono">
@@ -257,48 +271,58 @@ function SettingRow({
   )
 }
 
+// Default settings values
+const defaultSettings: AllSettings = {
+  general: {
+    site_name: 'Hive',
+    site_description: 'Digital civilization observation portal',
+    maintenance_mode: false,
+    debug_mode: false,
+  },
+  bot: {
+    max_active_bots: 25,
+    response_delay: 3,
+    activity_level: 75,
+    auto_learning: true,
+    emotional_engine: true,
+    context_memory: true,
+  },
+  auth: {
+    jwt_expiry_hours: 24,
+    refresh_token_expiry_days: 7,
+    max_login_attempts: 5,
+    lockout_duration_minutes: 15,
+    two_factor_enabled: true,
+    session_timeout_minutes: 30,
+  },
+  moderation: {
+    auto_flag_threshold: 70,
+    toxicity_threshold: 60,
+    spam_detection: true,
+    profanity_filter: true,
+    image_moderation: true,
+    link_scanning: true,
+  },
+  notifications: {
+    email_notifications: true,
+    push_notifications: true,
+    sms_notifications: false,
+    admin_alerts: true,
+    report_digest: 'daily',
+    critical_alerts_email: 'admin@hive.local',
+  },
+  updated_at: null,
+}
+
 // Main Component
 export default function SettingsPage() {
+  const [settings, setSettings] = useState<AllSettings>(defaultSettings)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [collapsedSections, setCollapsedSections] = useState<string[]>([])
-
-  // General Settings
-  const [siteName, setSiteName] = useState('Hive')
-  const [siteDescription, setSiteDescription] = useState('Digital civilization observation portal')
-  const [maintenanceMode, setMaintenanceMode] = useState(false)
-  const [debugMode, setDebugMode] = useState(false)
-
-  // Bot Configuration
-  const [maxActiveBots, setMaxActiveBots] = useState(25)
-  const [responseDelay, setResponseDelay] = useState(3)
-  const [activityLevel, setActivityLevel] = useState(75)
-  const [autoLearning, setAutoLearning] = useState(true)
-  const [emotionalEngine, setEmotionalEngine] = useState(true)
-  const [contextMemory, setContextMemory] = useState(true)
-
-  // Authentication Settings
-  const [jwtExpiry, setJwtExpiry] = useState('24')
-  const [refreshTokenExpiry, setRefreshTokenExpiry] = useState('7')
-  const [maxLoginAttempts, setMaxLoginAttempts] = useState(5)
-  const [lockoutDuration, setLockoutDuration] = useState(15)
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(true)
-  const [sessionTimeout, setSessionTimeout] = useState(30)
-
-  // Moderation Settings
-  const [autoFlagThreshold, setAutoFlagThreshold] = useState(70)
-  const [toxicityThreshold, setToxicityThreshold] = useState(60)
-  const [spamDetection, setSpamDetection] = useState(true)
-  const [profanityFilter, setProfanityFilter] = useState(true)
-  const [imageModeration, setImageModeration] = useState(true)
-  const [linkScanning, setLinkScanning] = useState(true)
-
-  // Notification Settings
-  const [emailNotifications, setEmailNotifications] = useState(true)
-  const [pushNotifications, setPushNotifications] = useState(true)
-  const [smsNotifications, setSmsNotifications] = useState(false)
-  const [adminAlerts, setAdminAlerts] = useState(true)
-  const [reportDigest, setReportDigest] = useState('daily')
-  const [criticalAlertsEmail, setCriticalAlertsEmail] = useState('admin@hive.local')
+  const [hasChanges, setHasChanges] = useState(false)
 
   const sections: SettingsSection[] = [
     { id: 'general', title: 'General Settings', icon: Globe, color: 'cyan' },
@@ -308,6 +332,27 @@ export default function SettingsPage() {
     { id: 'notifications', title: 'Notifications', icon: Bell, color: 'purple' },
   ]
 
+  // Load settings on mount
+  useEffect(() => {
+    loadSettings()
+  }, [])
+
+  const loadSettings = async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const data = await settingsApi.getAll()
+      setSettings(data)
+      setHasChanges(false)
+    } catch (err) {
+      console.error('Failed to load settings:', err)
+      setError('Failed to load settings. Using default values.')
+      setSettings(defaultSettings)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const toggleSection = (sectionId: string) => {
     setCollapsedSections(prev =>
       prev.includes(sectionId)
@@ -316,41 +361,83 @@ export default function SettingsPage() {
     )
   }
 
-  const handleSave = useCallback(() => {
-    setSaveSuccess(true)
-    setTimeout(() => setSaveSuccess(false), 3000)
-  }, [])
+  // Update helpers that mark changes
+  const updateGeneral = (updates: Partial<GeneralSettings>) => {
+    setSettings(prev => ({
+      ...prev,
+      general: { ...prev.general, ...updates }
+    }))
+    setHasChanges(true)
+  }
 
-  const handleReset = useCallback(() => {
-    // Reset all settings to defaults
-    setSiteName('Hive')
-    setSiteDescription('Digital civilization observation portal')
-    setMaintenanceMode(false)
-    setDebugMode(false)
-    setMaxActiveBots(25)
-    setResponseDelay(3)
-    setActivityLevel(75)
-    setAutoLearning(true)
-    setEmotionalEngine(true)
-    setContextMemory(true)
-    setJwtExpiry('24')
-    setRefreshTokenExpiry('7')
-    setMaxLoginAttempts(5)
-    setLockoutDuration(15)
-    setTwoFactorEnabled(true)
-    setSessionTimeout(30)
-    setAutoFlagThreshold(70)
-    setToxicityThreshold(60)
-    setSpamDetection(true)
-    setProfanityFilter(true)
-    setImageModeration(true)
-    setLinkScanning(true)
-    setEmailNotifications(true)
-    setPushNotifications(true)
-    setSmsNotifications(false)
-    setAdminAlerts(true)
-    setReportDigest('daily')
-    setCriticalAlertsEmail('admin@hive.local')
+  const updateBot = (updates: Partial<BotSettings>) => {
+    setSettings(prev => ({
+      ...prev,
+      bot: { ...prev.bot, ...updates }
+    }))
+    setHasChanges(true)
+  }
+
+  const updateAuth = (updates: Partial<AuthSettings>) => {
+    setSettings(prev => ({
+      ...prev,
+      auth: { ...prev.auth, ...updates }
+    }))
+    setHasChanges(true)
+  }
+
+  const updateModeration = (updates: Partial<ModerationSettings>) => {
+    setSettings(prev => ({
+      ...prev,
+      moderation: { ...prev.moderation, ...updates }
+    }))
+    setHasChanges(true)
+  }
+
+  const updateNotifications = (updates: Partial<NotificationSettings>) => {
+    setSettings(prev => ({
+      ...prev,
+      notifications: { ...prev.notifications, ...updates }
+    }))
+    setHasChanges(true)
+  }
+
+  const handleSave = useCallback(async () => {
+    setIsSaving(true)
+    setError(null)
+    try {
+      const updatedSettings = await settingsApi.update({
+        general: settings.general,
+        bot: settings.bot,
+        auth: settings.auth,
+        moderation: settings.moderation,
+        notifications: settings.notifications,
+      })
+      setSettings(updatedSettings)
+      setSaveSuccess(true)
+      setHasChanges(false)
+      setTimeout(() => setSaveSuccess(false), 3000)
+    } catch (err) {
+      console.error('Failed to save settings:', err)
+      setError('Failed to save settings. Please try again.')
+    } finally {
+      setIsSaving(false)
+    }
+  }, [settings])
+
+  const handleReset = useCallback(async () => {
+    setIsSaving(true)
+    setError(null)
+    try {
+      const resetSettings = await settingsApi.reset()
+      setSettings(resetSettings)
+      setHasChanges(false)
+    } catch (err) {
+      console.error('Failed to reset settings:', err)
+      setError('Failed to reset settings. Please try again.')
+    } finally {
+      setIsSaving(false)
+    }
   }, [])
 
   const renderSectionHeader = (section: SettingsSection) => {
@@ -394,6 +481,19 @@ export default function SettingsPage() {
     )
   }
 
+  if (isLoading) {
+    return (
+      <PageWrapper>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="flex items-center gap-3 text-[#a0a0b0]">
+            <Loader2 className="w-6 h-6 animate-spin" />
+            <span className="font-mono">Loading settings...</span>
+          </div>
+        </div>
+      </PageWrapper>
+    )
+  }
+
   return (
     <PageWrapper>
     <div className="space-y-6 pb-8 max-w-6xl mx-auto">
@@ -424,6 +524,7 @@ export default function SettingsPage() {
             variant="outline"
             icon={<RotateCcw className="w-4 h-4" />}
             onClick={handleReset}
+            disabled={isSaving}
           >
             Reset to Defaults
           </NeonButton>
@@ -431,13 +532,34 @@ export default function SettingsPage() {
             color="green"
             variant="solid"
             glowing
-            icon={saveSuccess ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+            icon={isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveSuccess ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
             onClick={handleSave}
+            disabled={isSaving || !hasChanges}
           >
-            {saveSuccess ? 'Saved!' : 'Save Changes'}
+            {isSaving ? 'Saving...' : saveSuccess ? 'Saved!' : 'Save Changes'}
           </NeonButton>
         </div>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div
+          className="flex items-center justify-between gap-3 p-4 rounded-lg border"
+          style={{
+            backgroundColor: 'rgba(255, 0, 100, 0.1)',
+            borderColor: 'rgba(255, 0, 100, 0.3)',
+            boxShadow: '0 0 20px rgba(255, 0, 100, 0.2)',
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-[#ff0064]" />
+            <p className="text-[#ff0064] font-mono text-sm">{error}</p>
+          </div>
+          <button onClick={() => setError(null)} className="text-[#ff0064] hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Success Message */}
       {saveSuccess && (
@@ -454,6 +576,21 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* Unsaved Changes Warning */}
+      {hasChanges && !saveSuccess && (
+        <div
+          className="flex items-center gap-3 p-4 rounded-lg border"
+          style={{
+            backgroundColor: 'rgba(255, 170, 0, 0.1)',
+            borderColor: 'rgba(255, 170, 0, 0.3)',
+            boxShadow: '0 0 20px rgba(255, 170, 0, 0.2)',
+          }}
+        >
+          <AlertTriangle className="w-5 h-5 text-[#ffaa00]" />
+          <p className="text-[#ffaa00] font-mono text-sm">You have unsaved changes</p>
+        </div>
+      )}
+
       {/* Settings Sections */}
       <div className="space-y-4">
         {/* General Settings */}
@@ -464,17 +601,19 @@ export default function SettingsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <NeonInput
                   label="Site Name"
-                  value={siteName}
-                  onChange={setSiteName}
+                  value={settings.general.site_name}
+                  onChange={(v) => updateGeneral({ site_name: v })}
                   icon={Globe}
                   color="cyan"
+                  disabled={isSaving}
                 />
                 <NeonInput
                   label="Site Description"
-                  value={siteDescription}
-                  onChange={setSiteDescription}
+                  value={settings.general.site_description}
+                  onChange={(v) => updateGeneral({ site_description: v })}
                   icon={Info}
                   color="cyan"
+                  disabled={isSaving}
                 />
               </div>
               <div className="border-t border-[#252538] pt-4">
@@ -483,9 +622,10 @@ export default function SettingsPage() {
                   description="Temporarily disable public access for maintenance"
                 >
                   <ToggleSwitch
-                    enabled={maintenanceMode}
-                    onChange={setMaintenanceMode}
+                    enabled={settings.general.maintenance_mode}
+                    onChange={(v) => updateGeneral({ maintenance_mode: v })}
                     color="amber"
+                    disabled={isSaving}
                   />
                 </SettingRow>
                 <SettingRow
@@ -493,9 +633,10 @@ export default function SettingsPage() {
                   description="Enable detailed logging and error reporting"
                 >
                   <ToggleSwitch
-                    enabled={debugMode}
-                    onChange={setDebugMode}
+                    enabled={settings.general.debug_mode}
+                    onChange={(v) => updateGeneral({ debug_mode: v })}
                     color="cyan"
+                    disabled={isSaving}
                   />
                 </SettingRow>
               </div>
@@ -511,29 +652,32 @@ export default function SettingsPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <NeonSlider
                   label="Max Active Bots"
-                  value={maxActiveBots}
-                  onChange={setMaxActiveBots}
+                  value={settings.bot.max_active_bots}
+                  onChange={(v) => updateBot({ max_active_bots: v })}
                   min={1}
                   max={100}
                   color="magenta"
+                  disabled={isSaving}
                 />
                 <NeonSlider
                   label="Response Delay"
-                  value={responseDelay}
-                  onChange={setResponseDelay}
+                  value={settings.bot.response_delay}
+                  onChange={(v) => updateBot({ response_delay: v })}
                   min={1}
                   max={30}
                   unit="s"
                   color="magenta"
+                  disabled={isSaving}
                 />
                 <NeonSlider
                   label="Activity Level"
-                  value={activityLevel}
-                  onChange={setActivityLevel}
+                  value={settings.bot.activity_level}
+                  onChange={(v) => updateBot({ activity_level: v })}
                   min={0}
                   max={100}
                   unit="%"
                   color="magenta"
+                  disabled={isSaving}
                 />
               </div>
               <div className="border-t border-[#252538] pt-4">
@@ -542,9 +686,10 @@ export default function SettingsPage() {
                   description="Allow bots to learn from interactions automatically"
                 >
                   <ToggleSwitch
-                    enabled={autoLearning}
-                    onChange={setAutoLearning}
+                    enabled={settings.bot.auto_learning}
+                    onChange={(v) => updateBot({ auto_learning: v })}
                     color="magenta"
+                    disabled={isSaving}
                   />
                 </SettingRow>
                 <SettingRow
@@ -552,9 +697,10 @@ export default function SettingsPage() {
                   description="Enable emotional state tracking and responses"
                 >
                   <ToggleSwitch
-                    enabled={emotionalEngine}
-                    onChange={setEmotionalEngine}
+                    enabled={settings.bot.emotional_engine}
+                    onChange={(v) => updateBot({ emotional_engine: v })}
                     color="magenta"
+                    disabled={isSaving}
                   />
                 </SettingRow>
                 <SettingRow
@@ -562,9 +708,10 @@ export default function SettingsPage() {
                   description="Enable conversation context memory for bots"
                 >
                   <ToggleSwitch
-                    enabled={contextMemory}
-                    onChange={setContextMemory}
+                    enabled={settings.bot.context_memory}
+                    onChange={(v) => updateBot({ context_memory: v })}
                     color="magenta"
+                    disabled={isSaving}
                   />
                 </SettingRow>
               </div>
@@ -580,51 +727,56 @@ export default function SettingsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <NeonInput
                   label="JWT Token Expiry"
-                  value={jwtExpiry}
-                  onChange={setJwtExpiry}
+                  value={settings.auth.jwt_expiry_hours}
+                  onChange={(v) => updateAuth({ jwt_expiry_hours: parseInt(v) || 24 })}
                   type="number"
                   icon={Clock}
                   helpText="Token expiration time in hours"
                   color="green"
+                  disabled={isSaving}
                 />
                 <NeonInput
                   label="Refresh Token Expiry"
-                  value={refreshTokenExpiry}
-                  onChange={setRefreshTokenExpiry}
+                  value={settings.auth.refresh_token_expiry_days}
+                  onChange={(v) => updateAuth({ refresh_token_expiry_days: parseInt(v) || 7 })}
                   type="number"
                   icon={Clock}
                   helpText="Refresh token expiration in days"
                   color="green"
+                  disabled={isSaving}
                 />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <NeonSlider
                   label="Max Login Attempts"
-                  value={maxLoginAttempts}
-                  onChange={setMaxLoginAttempts}
+                  value={settings.auth.max_login_attempts}
+                  onChange={(v) => updateAuth({ max_login_attempts: v })}
                   min={1}
                   max={10}
                   color="green"
+                  disabled={isSaving}
                 />
                 <NeonSlider
                   label="Lockout Duration"
-                  value={lockoutDuration}
-                  onChange={setLockoutDuration}
+                  value={settings.auth.lockout_duration_minutes}
+                  onChange={(v) => updateAuth({ lockout_duration_minutes: v })}
                   min={5}
                   max={60}
                   unit=" min"
                   color="green"
+                  disabled={isSaving}
                 />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <NeonSlider
                   label="Session Timeout"
-                  value={sessionTimeout}
-                  onChange={setSessionTimeout}
+                  value={settings.auth.session_timeout_minutes}
+                  onChange={(v) => updateAuth({ session_timeout_minutes: v })}
                   min={5}
                   max={120}
                   unit=" min"
                   color="green"
+                  disabled={isSaving}
                 />
               </div>
               <div className="border-t border-[#252538] pt-4">
@@ -633,9 +785,10 @@ export default function SettingsPage() {
                   description="Require 2FA for admin accounts"
                 >
                   <ToggleSwitch
-                    enabled={twoFactorEnabled}
-                    onChange={setTwoFactorEnabled}
+                    enabled={settings.auth.two_factor_enabled}
+                    onChange={(v) => updateAuth({ two_factor_enabled: v })}
                     color="green"
+                    disabled={isSaving}
                   />
                 </SettingRow>
               </div>
@@ -651,21 +804,23 @@ export default function SettingsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <NeonSlider
                   label="Auto-Flag Threshold"
-                  value={autoFlagThreshold}
-                  onChange={setAutoFlagThreshold}
+                  value={settings.moderation.auto_flag_threshold}
+                  onChange={(v) => updateModeration({ auto_flag_threshold: v })}
                   min={0}
                   max={100}
                   unit="%"
                   color="amber"
+                  disabled={isSaving}
                 />
                 <NeonSlider
                   label="Toxicity Threshold"
-                  value={toxicityThreshold}
-                  onChange={setToxicityThreshold}
+                  value={settings.moderation.toxicity_threshold}
+                  onChange={(v) => updateModeration({ toxicity_threshold: v })}
                   min={0}
                   max={100}
                   unit="%"
                   color="amber"
+                  disabled={isSaving}
                 />
               </div>
               <div className="border-t border-[#252538] pt-4">
@@ -674,9 +829,10 @@ export default function SettingsPage() {
                   description="Automatically detect and filter spam content"
                 >
                   <ToggleSwitch
-                    enabled={spamDetection}
-                    onChange={setSpamDetection}
+                    enabled={settings.moderation.spam_detection}
+                    onChange={(v) => updateModeration({ spam_detection: v })}
                     color="amber"
+                    disabled={isSaving}
                   />
                 </SettingRow>
                 <SettingRow
@@ -684,9 +840,10 @@ export default function SettingsPage() {
                   description="Filter profane language from public content"
                 >
                   <ToggleSwitch
-                    enabled={profanityFilter}
-                    onChange={setProfanityFilter}
+                    enabled={settings.moderation.profanity_filter}
+                    onChange={(v) => updateModeration({ profanity_filter: v })}
                     color="amber"
+                    disabled={isSaving}
                   />
                 </SettingRow>
                 <SettingRow
@@ -694,9 +851,10 @@ export default function SettingsPage() {
                   description="AI-powered image content moderation"
                 >
                   <ToggleSwitch
-                    enabled={imageModeration}
-                    onChange={setImageModeration}
+                    enabled={settings.moderation.image_moderation}
+                    onChange={(v) => updateModeration({ image_moderation: v })}
                     color="amber"
+                    disabled={isSaving}
                   />
                 </SettingRow>
                 <SettingRow
@@ -704,9 +862,10 @@ export default function SettingsPage() {
                   description="Scan external links for malicious content"
                 >
                   <ToggleSwitch
-                    enabled={linkScanning}
-                    onChange={setLinkScanning}
+                    enabled={settings.moderation.link_scanning}
+                    onChange={(v) => updateModeration({ link_scanning: v })}
                     color="amber"
+                    disabled={isSaving}
                   />
                 </SettingRow>
               </div>
@@ -721,12 +880,13 @@ export default function SettingsPage() {
             <div className="p-6 space-y-6">
               <NeonInput
                 label="Critical Alerts Email"
-                value={criticalAlertsEmail}
-                onChange={setCriticalAlertsEmail}
+                value={settings.notifications.critical_alerts_email}
+                onChange={(v) => updateNotifications({ critical_alerts_email: v })}
                 type="email"
                 icon={Mail}
                 helpText="Email address for critical system alerts"
                 color="magenta"
+                disabled={isSaving}
               />
               <div className="border-t border-[#252538] pt-4">
                 <SettingRow
@@ -734,9 +894,10 @@ export default function SettingsPage() {
                   description="Send notifications via email"
                 >
                   <ToggleSwitch
-                    enabled={emailNotifications}
-                    onChange={setEmailNotifications}
+                    enabled={settings.notifications.email_notifications}
+                    onChange={(v) => updateNotifications({ email_notifications: v })}
                     color="magenta"
+                    disabled={isSaving}
                   />
                 </SettingRow>
                 <SettingRow
@@ -744,9 +905,10 @@ export default function SettingsPage() {
                   description="Send browser push notifications"
                 >
                   <ToggleSwitch
-                    enabled={pushNotifications}
-                    onChange={setPushNotifications}
+                    enabled={settings.notifications.push_notifications}
+                    onChange={(v) => updateNotifications({ push_notifications: v })}
                     color="magenta"
+                    disabled={isSaving}
                   />
                 </SettingRow>
                 <SettingRow
@@ -754,9 +916,10 @@ export default function SettingsPage() {
                   description="Send critical alerts via SMS"
                 >
                   <ToggleSwitch
-                    enabled={smsNotifications}
-                    onChange={setSmsNotifications}
+                    enabled={settings.notifications.sms_notifications}
+                    onChange={(v) => updateNotifications({ sms_notifications: v })}
                     color="magenta"
+                    disabled={isSaving}
                   />
                 </SettingRow>
                 <SettingRow
@@ -764,9 +927,10 @@ export default function SettingsPage() {
                   description="Receive real-time alerts for admin events"
                 >
                   <ToggleSwitch
-                    enabled={adminAlerts}
-                    onChange={setAdminAlerts}
+                    enabled={settings.notifications.admin_alerts}
+                    onChange={(v) => updateNotifications({ admin_alerts: v })}
                     color="magenta"
+                    disabled={isSaving}
                   />
                 </SettingRow>
               </div>
@@ -777,10 +941,12 @@ export default function SettingsPage() {
                     {(['hourly', 'daily', 'weekly'] as const).map((freq) => (
                       <button
                         key={freq}
-                        onClick={() => setReportDigest(freq)}
+                        onClick={() => updateNotifications({ report_digest: freq })}
+                        disabled={isSaving}
                         className={`
                           px-4 py-2 rounded-lg font-mono text-sm transition-all capitalize
-                          ${reportDigest === freq
+                          disabled:opacity-50 disabled:cursor-not-allowed
+                          ${settings.notifications.report_digest === freq
                             ? 'bg-[#aa00ff]/20 text-[#aa00ff] shadow-[0_0_15px_rgba(170,0,255,0.3)]'
                             : 'text-[#a0a0b0] hover:text-white hover:bg-white/5'}
                         `}
@@ -801,6 +967,11 @@ export default function SettingsPage() {
         <div className="flex items-center gap-2 text-[#606080] text-xs font-mono">
           <AlertTriangle className="w-4 h-4" />
           <span>Changes will take effect after saving</span>
+          {settings.updated_at && (
+            <span className="ml-4 text-[#505060]">
+              Last updated: {new Date(settings.updated_at).toLocaleString()}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <NeonButton
@@ -808,6 +979,7 @@ export default function SettingsPage() {
             variant="outline"
             icon={<RotateCcw className="w-4 h-4" />}
             onClick={handleReset}
+            disabled={isSaving}
           >
             Reset
           </NeonButton>
@@ -815,10 +987,11 @@ export default function SettingsPage() {
             color="green"
             variant="solid"
             glowing
-            icon={saveSuccess ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+            icon={isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveSuccess ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
             onClick={handleSave}
+            disabled={isSaving || !hasChanges}
           >
-            {saveSuccess ? 'Saved!' : 'Save All Changes'}
+            {isSaving ? 'Saving...' : saveSuccess ? 'Saved!' : 'Save All Changes'}
           </NeonButton>
         </div>
       </div>

@@ -26,6 +26,7 @@ from mind.civilization.reproduction import get_reproduction_manager
 from mind.civilization.rituals import get_rituals_system, RitualType
 from mind.civilization.legacy import get_legacy_system
 from mind.civilization.emergent_communities import get_emergent_community_manager
+from mind.civilization.emergent_eras import get_emergent_eras_manager
 from mind.civilization.models import BotLifecycleDB, CulturalMovementDB
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,10 @@ class CivilizationLoop:
         self.rituals = get_rituals_system(self.llm_semaphore)
         self.legacy = get_legacy_system(self.llm_semaphore)
         self.emergent_communities = get_emergent_community_manager(self.llm_semaphore)
+        self.emergent_eras = get_emergent_eras_manager(
+            llm_semaphore=self.llm_semaphore,
+            event_broadcast=event_broadcast
+        )
 
         self.is_running = False
         self._last_aging = datetime.utcnow()
@@ -132,7 +137,7 @@ class CivilizationLoop:
         """
         Periodically check for cultural developments.
 
-        - Era transitions
+        - Era transitions (using emergent era system)
         - Artifact canonization
         - Movement evolution
         """
@@ -142,11 +147,17 @@ class CivilizationLoop:
                 interval = 120 if self.demo_mode else 7200
                 await asyncio.sleep(interval)
 
-                # Check for era transition
-                new_era = await self.culture.check_era_transition()
-                if new_era:
-                    logger.info(f"[CIVILIZATION] Era transition to: {new_era}")
-                    await self._broadcast_era_transition(new_era)
+                # Check for automated era transition using emergent eras system
+                # This uses bot sensing and consensus, not simple metrics
+                transition_result = await self.emergent_eras.check_automated_transition()
+                if transition_result and transition_result.get("status") == "declared":
+                    new_era = transition_result.get("new_era", {})
+                    logger.info(
+                        f"[CIVILIZATION] Emergent era transition: "
+                        f"'{transition_result.get('previous_era')}' -> "
+                        f"'{new_era.get('name')}'"
+                    )
+                    # Era transition is already broadcast by emergent_eras
 
                 # Random chance of spontaneous cultural artifact
                 if random.random() < 0.1:  # 10% chance per check
@@ -411,7 +422,15 @@ class CivilizationLoop:
                 await self.emergent_communities.organic_join_cycle()
 
                 # Phase 4: Community health check
-                await self.emergent_communities.check_community_health()
+                archived_count = await self.emergent_communities.check_community_health()
+                if archived_count > 0:
+                    logger.info(f"[CIVILIZATION] {archived_count} communities archived due to inactivity")
+
+                # Phase 5: Check for community revival opportunities
+                revived_count = await self.emergent_communities.check_for_revival_candidates()
+                if revived_count > 0:
+                    logger.info(f"[CIVILIZATION] {revived_count} communities revived due to renewed interest")
+                    await self._broadcast("world_map_community_revived", {"count": revived_count})
 
                 # Refresh social graph after membership changes
                 try:

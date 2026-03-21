@@ -90,13 +90,13 @@ export default function CivilizationPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white p-8">
+      <div className="min-h-screen bg-background text-white p-8">
         <div className="max-w-7xl mx-auto">
           <div className="animate-pulse">
-            <div className="h-8 bg-gray-700 rounded w-64 mb-8"></div>
+            <div className="h-8 bg-[#2a2a2a] rounded w-64 mb-8"></div>
             <div className="grid grid-cols-4 gap-4 mb-8">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-24 bg-gray-800 rounded-lg"></div>
+                <div key={i} className="h-24 bg-[#141414] rounded-lg"></div>
               ))}
             </div>
           </div>
@@ -106,19 +106,19 @@ export default function CivilizationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
+    <div className="min-h-screen bg-background text-white p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold">Digital Civilization</h1>
-            <p className="text-gray-400 mt-1">
+            <p className="text-[#666666] mt-1">
               {stats?.current_era || "Loading..."} Era
             </p>
           </div>
           <Link
             href="/"
-            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition"
+            className="px-4 py-2 bg-[#141414] border border-[#2a2a2a] hover:border-[#3a3a3a] rounded-lg transition"
           >
             Back to Dashboard
           </Link>
@@ -153,15 +153,15 @@ export default function CivilizationPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-6 border-b border-gray-700 pb-2">
+        <div className="flex gap-2 mb-6 border-b border-[#2a2a2a] pb-2">
           {(["overview", "culture", "timeline", "generations"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`px-4 py-2 rounded-t-lg capitalize transition ${
                 activeTab === tab
-                  ? "bg-gray-700 text-white"
-                  : "text-gray-400 hover:text-white"
+                  ? "bg-[#141414] text-white border-b-2 border-[#44ff88]"
+                  : "text-[#666666] hover:text-white"
               }`}
             >
               {tab}
@@ -201,10 +201,10 @@ function StatCard({
   color: string;
 }) {
   const colorClasses = {
-    green: "bg-green-900/30 border-green-700",
-    gray: "bg-gray-800 border-gray-600",
-    purple: "bg-purple-900/30 border-purple-700",
-    amber: "bg-amber-900/30 border-amber-700",
+    green: "bg-[#44ff88]/10 border-[#44ff88]/30",
+    gray: "bg-[#141414] border-[#2a2a2a]",
+    purple: "bg-[#ff00aa]/10 border-[#ff00aa]/30",
+    amber: "bg-[#ffaa00]/10 border-[#ffaa00]/30",
   };
 
   return (
@@ -215,7 +215,7 @@ function StatCard({
         <span className="text-2xl">{icon}</span>
         <div>
           <div className="text-2xl font-bold">{value}</div>
-          <div className="text-sm text-gray-400">{label}</div>
+          <div className="text-sm text-[#666666]">{label}</div>
         </div>
       </div>
     </div>
@@ -234,72 +234,72 @@ function OverviewTab({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       {/* Era & Identity */}
-      <div className="bg-gray-800 rounded-lg p-6">
+      <div className="bg-[#141414] rounded-lg p-6 border border-[#2a2a2a]">
         <h2 className="text-xl font-semibold mb-4">Civilization Identity</h2>
         <div className="space-y-3">
           <div className="flex justify-between">
-            <span className="text-gray-400">Current Era</span>
+            <span className="text-[#666666]">Current Era</span>
             <span className="font-medium">{stats?.current_era || "Unknown"}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-400">Total Population (All Time)</span>
+            <span className="text-[#666666]">Total Population (All Time)</span>
             <span className="font-medium">{stats?.total_bots || 0}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-400">Active Movements</span>
+            <span className="text-[#666666]">Active Movements</span>
             <span className="font-medium">{stats?.total_movements || 0}</span>
           </div>
         </div>
       </div>
 
       {/* Top Movement */}
-      <div className="bg-gray-800 rounded-lg p-6">
+      <div className="bg-[#141414] rounded-lg p-6 border border-[#2a2a2a]">
         <h2 className="text-xl font-semibold mb-4">Dominant Movement</h2>
         {movements[0] ? (
           <div>
-            <div className="text-lg font-medium text-purple-400">
+            <div className="text-lg font-medium text-[#ff00aa]">
               {movements[0].name}
             </div>
-            <div className="text-sm text-gray-400 mt-1">
+            <div className="text-sm text-[#666666] mt-1">
               {movements[0].movement_type} • {movements[0].follower_count} followers
             </div>
-            <p className="text-gray-300 mt-3">{movements[0].description}</p>
+            <p className="text-[#a0a0a0] mt-3">{movements[0].description}</p>
             <div className="mt-3">
-              <div className="text-xs text-gray-500 mb-1">Cultural Influence</div>
-              <div className="w-full bg-gray-700 rounded-full h-2">
+              <div className="text-xs text-[#555555] mb-1">Cultural Influence</div>
+              <div className="w-full bg-[#1a1a1a] rounded-full h-2">
                 <div
-                  className="bg-purple-500 h-2 rounded-full"
+                  className="bg-[#ff00aa] h-2 rounded-full"
                   style={{ width: `${movements[0].influence_score * 100}%` }}
                 ></div>
               </div>
             </div>
           </div>
         ) : (
-          <p className="text-gray-500">No movements yet</p>
+          <p className="text-[#555555]">No movements yet</p>
         )}
       </div>
 
       {/* Recent Artifacts */}
-      <div className="bg-gray-800 rounded-lg p-6 md:col-span-2">
+      <div className="bg-[#141414] rounded-lg p-6 border border-[#2a2a2a] md:col-span-2">
         <h2 className="text-xl font-semibold mb-4">Canonical Knowledge</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {artifacts.slice(0, 4).map((artifact) => (
             <div
               key={artifact.id}
-              className="p-4 bg-gray-700/50 rounded-lg"
+              className="p-4 bg-background rounded-lg border border-[#1a1a1a]"
             >
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="font-medium text-amber-400">{artifact.title}</div>
-                  <div className="text-xs text-gray-500 mt-1">
+                  <div className="font-medium text-[#ffaa00]">{artifact.title}</div>
+                  <div className="text-xs text-[#555555] mt-1">
                     {artifact.artifact_type} by {artifact.creator_name}
                   </div>
                 </div>
-                <span className="text-xs bg-amber-900/50 text-amber-300 px-2 py-1 rounded">
+                <span className="text-xs bg-[#ffaa00]/20 text-[#ffaa00] px-2 py-1 rounded">
                   {artifact.times_referenced} refs
                 </span>
               </div>
-              <p className="text-gray-300 text-sm mt-2 line-clamp-2">
+              <p className="text-[#a0a0a0] text-sm mt-2 line-clamp-2">
                 {artifact.content}
               </p>
             </div>
@@ -326,20 +326,20 @@ function CultureTab({
           {movements.map((movement) => (
             <div
               key={movement.id}
-              className="bg-gray-800 rounded-lg p-4 border border-gray-700"
+              className="bg-[#141414] rounded-lg p-4 border border-[#2a2a2a]"
             >
               <div className="flex items-center justify-between mb-2">
-                <span className="text-purple-400 font-medium">{movement.name}</span>
-                <span className="text-xs text-gray-500">{movement.movement_type}</span>
+                <span className="text-[#ff00aa] font-medium">{movement.name}</span>
+                <span className="text-xs text-[#555555]">{movement.movement_type}</span>
               </div>
-              <p className="text-gray-400 text-sm mb-3">{movement.description}</p>
-              <div className="text-xs text-gray-500">
+              <p className="text-[#666666] text-sm mb-3">{movement.description}</p>
+              <div className="text-xs text-[#555555]">
                 {movement.follower_count} followers • Influence: {(movement.influence_score * 100).toFixed(0)}%
               </div>
               {movement.core_tenets.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-gray-700">
-                  <div className="text-xs text-gray-500 mb-1">Core Tenets:</div>
-                  <ul className="text-xs text-gray-400 list-disc list-inside">
+                <div className="mt-3 pt-3 border-t border-[#2a2a2a]">
+                  <div className="text-xs text-[#555555] mb-1">Core Tenets:</div>
+                  <ul className="text-xs text-[#666666] list-disc list-inside">
                     {movement.core_tenets.slice(0, 2).map((tenet, i) => (
                       <li key={i}>{tenet}</li>
                     ))}
@@ -358,25 +358,25 @@ function CultureTab({
           {artifacts.map((artifact) => (
             <div
               key={artifact.id}
-              className="bg-gray-800 rounded-lg p-4 border border-gray-700"
+              className="bg-[#141414] rounded-lg p-4 border border-[#2a2a2a]"
             >
               <div className="flex items-start justify-between">
                 <div>
-                  <span className="text-amber-400 font-medium">{artifact.title}</span>
-                  <span className="text-gray-500 text-sm ml-2">({artifact.artifact_type})</span>
+                  <span className="text-[#ffaa00] font-medium">{artifact.title}</span>
+                  <span className="text-[#555555] text-sm ml-2">({artifact.artifact_type})</span>
                 </div>
                 <div className="flex items-center gap-2">
                   {artifact.is_canonical && (
-                    <span className="text-xs bg-amber-900/50 text-amber-300 px-2 py-0.5 rounded">
+                    <span className="text-xs bg-[#ffaa00]/20 text-[#ffaa00] px-2 py-0.5 rounded">
                       Canonical
                     </span>
                   )}
                 </div>
               </div>
-              <blockquote className="text-gray-300 mt-2 pl-3 border-l-2 border-gray-600 italic">
+              <blockquote className="text-[#a0a0a0] mt-2 pl-3 border-l-2 border-[#2a2a2a] italic">
                 {artifact.content}
               </blockquote>
-              <div className="text-xs text-gray-500 mt-2">
+              <div className="text-xs text-[#555555] mt-2">
                 Created by {artifact.creator_name} • Referenced {artifact.times_referenced} times
               </div>
             </div>
@@ -406,15 +406,15 @@ function TimelineTab({ events }: { events: TimelineEvent[] }) {
   const getEventColor = (type: string) => {
     switch (type) {
       case "birth":
-        return "border-green-500";
+        return "border-[#44ff88]";
       case "death":
-        return "border-gray-500";
+        return "border-[#666666]";
       case "artifact":
-        return "border-amber-500";
+        return "border-[#ffaa00]";
       case "era":
-        return "border-purple-500";
+        return "border-[#ff00aa]";
       default:
-        return "border-gray-600";
+        return "border-[#2a2a2a]";
     }
   };
 
@@ -423,33 +423,33 @@ function TimelineTab({ events }: { events: TimelineEvent[] }) {
       <h2 className="text-xl font-semibold mb-4">Civilization Timeline</h2>
       <div className="relative">
         {/* Timeline line */}
-        <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-700"></div>
+        <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-[#2a2a2a]"></div>
 
         {events.map((event, index) => (
           <div key={index} className="relative pl-12 pb-6">
             {/* Event marker */}
             <div
-              className={`absolute left-2 w-5 h-5 rounded-full bg-gray-800 border-2 ${getEventColor(
+              className={`absolute left-2 w-5 h-5 rounded-full bg-[#141414] border-2 ${getEventColor(
                 event.type
               )} flex items-center justify-center text-xs`}
             >
               {getEventIcon(event.type)}
             </div>
 
-            <div className="bg-gray-800 rounded-lg p-4">
+            <div className="bg-[#141414] rounded-lg p-4 border border-[#2a2a2a]">
               <div className="flex items-center justify-between mb-1">
                 <span className="font-medium">{event.title}</span>
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-[#555555]">
                   {new Date(event.date).toLocaleDateString()}
                 </span>
               </div>
-              <p className="text-gray-400 text-sm">{event.details}</p>
+              <p className="text-[#666666] text-sm">{event.details}</p>
             </div>
           </div>
         ))}
 
         {events.length === 0 && (
-          <p className="text-gray-500 text-center py-8">No events recorded yet</p>
+          <p className="text-[#555555] text-center py-8">No events recorded yet</p>
         )}
       </div>
     </div>
@@ -465,24 +465,24 @@ function GenerationsTab({ generations }: { generations: GenerationStats[] }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Chart */}
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h3 className="text-sm text-gray-400 mb-4">Population by Generation</h3>
+        <div className="bg-[#141414] rounded-lg p-6 border border-[#2a2a2a]">
+          <h3 className="text-sm text-[#666666] mb-4">Population by Generation</h3>
           <div className="space-y-3">
             {generations.map((gen) => (
               <div key={gen.generation} className="space-y-1">
                 <div className="flex justify-between text-sm">
                   <span>Generation {gen.generation}</span>
-                  <span className="text-gray-400">
+                  <span className="text-[#666666]">
                     {gen.alive}/{gen.total}
                   </span>
                 </div>
-                <div className="w-full bg-gray-700 rounded-full h-4 overflow-hidden">
+                <div className="w-full bg-[#1a1a1a] rounded-full h-4 overflow-hidden">
                   <div
-                    className="h-4 rounded-full bg-gradient-to-r from-green-600 to-green-400"
+                    className="h-4 rounded-full bg-gradient-to-r from-[#44ff88]/80 to-[#44ff88]"
                     style={{ width: `${(gen.alive / maxTotal) * 100}%` }}
                   ></div>
                   <div
-                    className="h-4 -mt-4 rounded-full bg-gray-500 opacity-50"
+                    className="h-4 -mt-4 rounded-full bg-[#444444] opacity-50"
                     style={{ width: `${(gen.total / maxTotal) * 100}%` }}
                   ></div>
                 </div>
@@ -492,11 +492,11 @@ function GenerationsTab({ generations }: { generations: GenerationStats[] }) {
         </div>
 
         {/* Stats */}
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h3 className="text-sm text-gray-400 mb-4">Generation Details</h3>
+        <div className="bg-[#141414] rounded-lg p-6 border border-[#2a2a2a]">
+          <h3 className="text-sm text-[#666666] mb-4">Generation Details</h3>
           <table className="w-full">
             <thead>
-              <tr className="text-left text-gray-500 text-sm">
+              <tr className="text-left text-[#555555] text-sm">
                 <th className="pb-2">Gen</th>
                 <th className="pb-2">Total</th>
                 <th className="pb-2">Alive</th>
@@ -505,16 +505,16 @@ function GenerationsTab({ generations }: { generations: GenerationStats[] }) {
             </thead>
             <tbody>
               {generations.map((gen) => (
-                <tr key={gen.generation} className="border-t border-gray-700">
+                <tr key={gen.generation} className="border-t border-[#2a2a2a]">
                   <td className="py-2 font-medium">Gen {gen.generation}</td>
-                  <td className="py-2 text-gray-400">{gen.total}</td>
+                  <td className="py-2 text-[#666666]">{gen.total}</td>
                   <td className="py-2">
-                    <span className="text-green-400">{gen.alive}</span>
-                    <span className="text-gray-600 text-sm ml-1">
+                    <span className="text-[#44ff88]">{gen.alive}</span>
+                    <span className="text-[#555555] text-sm ml-1">
                       ({((gen.alive / gen.total) * 100).toFixed(0)}%)
                     </span>
                   </td>
-                  <td className="py-2 text-gray-400">{Math.round(gen.avg_age)}</td>
+                  <td className="py-2 text-[#666666]">{Math.round(gen.avg_age)}</td>
                 </tr>
               ))}
             </tbody>
@@ -523,7 +523,7 @@ function GenerationsTab({ generations }: { generations: GenerationStats[] }) {
       </div>
 
       {generations.length === 0 && (
-        <p className="text-gray-500 text-center py-8">
+        <p className="text-[#555555] text-center py-8">
           No generation data yet. Initialize bot lifecycles first.
         </p>
       )}

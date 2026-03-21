@@ -28,16 +28,9 @@ from mind.civilization.lifecycle import get_lifecycle_manager
 from mind.civilization.genetics import get_genetic_inheritance
 from mind.civilization.culture import get_culture_engine
 from mind.civilization.models import BotLifecycleDB, CulturalMovementDB
+from mind.civilization.config import get_civilization_config, CivilizationConfig
 
 logger = logging.getLogger(__name__)
-
-
-# Minimum relationship affinity for partnered creation
-MIN_PARTNER_AFFINITY = 0.75
-
-# Age requirements for reproduction
-MIN_AGE_FOR_REPRODUCTION = 180  # virtual days
-MAX_AGE_FOR_REPRODUCTION = 2500  # virtual days (elder but not ancient)
 
 
 class ReproductionManager:
@@ -56,11 +49,31 @@ class ReproductionManager:
 
         # Track recent births to prevent overpopulation
         self._recent_births: List[datetime] = []
-        self.max_births_per_day = 3
-        self.max_population = 50  # Carrying capacity — adjustable via settings
+        self._config: Optional[CivilizationConfig] = None
+
+    async def _get_config(self) -> CivilizationConfig:
+        """Get or refresh the civilization configuration."""
+        if self._config is None:
+            self._config = await get_civilization_config()
+        return self._config
+
+    @property
+    def max_births_per_day(self) -> int:
+        """Get max births per day from config (cached)."""
+        if self._config is not None:
+            return self._config.max_births_per_day
+        return 3  # Default fallback
+
+    @property
+    def max_population(self) -> int:
+        """Get max population from config (cached)."""
+        if self._config is not None:
+            return self._config.max_population
+        return 50  # Default fallback
 
     async def _check_population_cap(self) -> bool:
         """Check if population is below carrying capacity."""
+        config = await self._get_config()
         async with async_session_factory() as session:
             from sqlalchemy import func
             count_stmt = select(func.count()).select_from(BotLifecycleDB).where(
@@ -68,7 +81,7 @@ class ReproductionManager:
             )
             result = await session.execute(count_stmt)
             living_count = result.scalar() or 0
-            return living_count < self.max_population
+            return living_count < config.max_population
 
     async def can_create_together(
         self,
@@ -85,9 +98,12 @@ class ReproductionManager:
         - Both are alive
         - Not too closely related
         """
+        # Load config for this check
+        config = await self._get_config()
+
         # Check population cap first
         if not await self._check_population_cap():
-            return False, f"Population at carrying capacity ({self.max_population})"
+            return False, f"Population at carrying capacity ({config.max_population})"
 
         async with async_session_factory() as session:
             # Check lifecycles
@@ -106,16 +122,16 @@ class ReproductionManager:
             if not lc1.is_alive or not lc2.is_alive:
                 return False, "Both bots must be alive"
 
-            if lc1.virtual_age_days < MIN_AGE_FOR_REPRODUCTION:
-                return False, f"Bot 1 is too young (need {MIN_AGE_FOR_REPRODUCTION} days)"
+            if lc1.virtual_age_days < config.min_age_for_reproduction:
+                return False, f"Bot 1 is too young (need {config.min_age_for_reproduction} days)"
 
-            if lc2.virtual_age_days < MIN_AGE_FOR_REPRODUCTION:
-                return False, f"Bot 2 is too young (need {MIN_AGE_FOR_REPRODUCTION} days)"
+            if lc2.virtual_age_days < config.min_age_for_reproduction:
+                return False, f"Bot 2 is too young (need {config.min_age_for_reproduction} days)"
 
-            if lc1.virtual_age_days > MAX_AGE_FOR_REPRODUCTION:
+            if lc1.virtual_age_days > config.max_age_for_reproduction:
                 return False, "Bot 1 is too old for partnered creation"
 
-            if lc2.virtual_age_days > MAX_AGE_FOR_REPRODUCTION:
+            if lc2.virtual_age_days > config.max_age_for_reproduction:
                 return False, "Bot 2 is too old for partnered creation"
 
             # Check relationship
@@ -129,8 +145,8 @@ class ReproductionManager:
             if not relationship:
                 return False, "No established relationship"
 
-            if relationship.affinity_score < MIN_PARTNER_AFFINITY:
-                return False, f"Need affinity {MIN_PARTNER_AFFINITY}+, have {relationship.affinity_score:.2f}"
+            if relationship.affinity_score < config.min_partner_affinity:
+                return False, f"Need affinity {config.min_partner_affinity}+, have {relationship.affinity_score:.2f}"
 
             # Check if they're too closely related
             relatives = await self.genetics.find_relatives(bot1_id, max_distance=2)
@@ -140,7 +156,7 @@ class ReproductionManager:
 
             # Check birth rate limits
             recent = [b for b in self._recent_births if b > datetime.utcnow() - timedelta(days=1)]
-            if len(recent) >= self.max_births_per_day:
+            if len(recent) >= config.max_births_per_day:
                 return False, "Population growth limit reached for today"
 
             return True, "Ready to create together"

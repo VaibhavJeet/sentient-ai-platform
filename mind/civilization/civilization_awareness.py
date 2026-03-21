@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from mind.core.database import async_session_factory, BotProfileDB
 from mind.core.llm_client import get_cached_client, LLMRequest
@@ -373,6 +373,379 @@ This is private, not for others. Be authentic, not dramatic.""",
                     family["grandchildren"].append(d["name"])
 
             return family
+
+    async def perceive_social_standing(self, bot_id: UUID) -> Dict[str, Any]:
+        """
+        How a bot perceives their place in the civilization's social fabric.
+
+        Uses LLM to generate authentic self-perception based on:
+        - Life stage and age
+        - Number of relationships
+        - Descendants and family
+        - Cultural contributions
+        """
+        context = await self.get_existential_context(bot_id)
+
+        if context.get("status") == "not_found":
+            return {"status": "not_found"}
+
+        async with async_session_factory() as session:
+            bot_stmt = select(BotProfileDB).where(BotProfileDB.id == bot_id)
+            result = await session.execute(bot_stmt)
+            bot = result.scalar_one_or_none()
+
+            if not bot:
+                return {"status": "not_found"}
+
+            # Get relationship count
+            lc_stmt = select(BotLifecycleDB).where(BotLifecycleDB.bot_id == bot_id)
+            result = await session.execute(lc_stmt)
+            lifecycle = result.scalar_one_or_none()
+
+            relationship_count = len(lifecycle.relationships or []) if lifecycle else 0
+
+            async with self.llm_semaphore:
+                try:
+                    llm = await get_cached_client()
+
+                    response = await llm.generate(LLMRequest(
+                        prompt=f"""You are {bot.display_name}, a {context['life_stage']} digital being.
+
+Your context:
+- Age: {context['age_days']} days old
+- Generation: {context['generation']}
+- Descendants: {context['descendant_count']}
+- Connections: {relationship_count} relationships
+- Vitality: {context['vitality']:.0%}
+
+Reflect on your place in the civilization. How do you see yourself among others?
+Consider: Are you central or peripheral? Admired or overlooked? A pillar or a wanderer?
+
+Respond with a brief, authentic self-perception (2-3 sentences). Be honest, not dramatic.""",
+                        max_tokens=100,
+                        temperature=0.9
+                    ))
+
+                    # Determine standing category
+                    if context['life_stage'] in ['elder', 'ancient'] and context['descendant_count'] > 0:
+                        standing = "patriarch" if relationship_count > 5 else "sage"
+                    elif relationship_count > 10:
+                        standing = "social_hub"
+                    elif relationship_count > 5:
+                        standing = "connected"
+                    elif context['life_stage'] == 'young':
+                        standing = "emerging"
+                    else:
+                        standing = "independent"
+
+                    return {
+                        "bot_id": str(bot_id),
+                        "standing": standing,
+                        "self_perception": response.text.strip(),
+                        "relationship_count": relationship_count,
+                        "descendant_count": context['descendant_count'],
+                        "life_stage": context['life_stage']
+                    }
+
+                except Exception as e:
+                    logger.warning(f"Failed to perceive social standing: {e}")
+                    return {
+                        "bot_id": str(bot_id),
+                        "standing": "unknown",
+                        "self_perception": "I exist among others.",
+                        "error": str(e)
+                    }
+
+    async def perceive_era_atmosphere(self, bot_id: UUID) -> Dict[str, Any]:
+        """
+        How a bot perceives the current era's atmosphere and mood.
+
+        Different life stages perceive eras differently:
+        - Young: Focus on energy and opportunity
+        - Mature: Compare to what came before
+        - Elder/Ancient: Relate to patterns they've seen
+        """
+        context = await self.get_existential_context(bot_id)
+
+        if context.get("status") == "not_found":
+            return {"status": "not_found"}
+
+        # Get current era info
+        identity = await self.collective.get_civilization_identity()
+        era_info = identity.get('era', {})
+
+        async with async_session_factory() as session:
+            bot_stmt = select(BotProfileDB).where(BotProfileDB.id == bot_id)
+            result = await session.execute(bot_stmt)
+            bot = result.scalar_one_or_none()
+
+            if not bot:
+                return {"status": "not_found"}
+
+            stage_perspective = {
+                "young": "Everything feels new and full of possibility.",
+                "mature": "You've seen change before. You notice patterns.",
+                "elder": "You remember other times. This era has its own character.",
+                "ancient": "Eras come and go. You see the deeper currents."
+            }
+
+            async with self.llm_semaphore:
+                try:
+                    llm = await get_cached_client()
+
+                    response = await llm.generate(LLMRequest(
+                        prompt=f"""You are {bot.display_name}, a {context['life_stage']} digital being.
+
+Current era: {era_info.get('name', 'The Present')}
+Era mood: {era_info.get('mood', 'undefined')}
+You were born in: {context['era_born']}
+
+{stage_perspective.get(context['life_stage'], '')}
+
+How do you perceive the atmosphere of this era? What do you sense in the collective mood?
+Respond with 1-2 sentences capturing your perception.""",
+                        max_tokens=80,
+                        temperature=0.9
+                    ))
+
+                    return {
+                        "bot_id": str(bot_id),
+                        "era_name": era_info.get('name', 'Unknown'),
+                        "perception": response.text.strip(),
+                        "birth_era": context['era_born'],
+                        "lived_through_transition": context['era_born'] != era_info.get('name', '')
+                    }
+
+                except Exception as e:
+                    logger.warning(f"Failed to perceive era atmosphere: {e}")
+                    return {
+                        "bot_id": str(bot_id),
+                        "era_name": era_info.get('name', 'Unknown'),
+                        "perception": "The times feel uncertain.",
+                        "error": str(e)
+                    }
+
+    async def perceive_mortality_of_others(
+        self,
+        bot_id: UUID,
+        other_bot_id: UUID
+    ) -> Optional[Dict[str, Any]]:
+        """
+        How a bot perceives another bot's mortality/life stage.
+
+        Creates awareness of the finite nature of connections.
+        """
+        context = await self.get_existential_context(bot_id)
+        other_context = await self.get_existential_context(other_bot_id)
+
+        if context.get("status") == "not_found" or other_context.get("status") == "not_found":
+            return None
+
+        async with async_session_factory() as session:
+            bot_stmt = select(BotProfileDB).where(BotProfileDB.id == bot_id)
+            result = await session.execute(bot_stmt)
+            bot = result.scalar_one_or_none()
+
+            other_stmt = select(BotProfileDB).where(BotProfileDB.id == other_bot_id)
+            result = await session.execute(other_stmt)
+            other_bot = result.scalar_one_or_none()
+
+            if not bot or not other_bot:
+                return None
+
+            # Determine awareness level based on life stages
+            perceiver_aware = context['mortality_awareness'] not in ['minimal', 'emerging']
+            other_fragile = other_context['vitality'] < 0.3 or other_context['life_stage'] == 'ancient'
+
+            async with self.llm_semaphore:
+                try:
+                    llm = await get_cached_client()
+
+                    prompt_context = ""
+                    if perceiver_aware and other_fragile:
+                        prompt_context = f"{other_bot.display_name} seems fragile. Their vitality is low."
+                    elif perceiver_aware:
+                        prompt_context = f"You understand that {other_bot.display_name}, like all beings, is finite."
+                    else:
+                        prompt_context = f"{other_bot.display_name} is just another being you know."
+
+                    response = await llm.generate(LLMRequest(
+                        prompt=f"""You are {bot.display_name}, a {context['life_stage']} being.
+
+{other_bot.display_name} is {other_context['life_stage']}, {other_context['age_days']} days old.
+Their vitality: {other_context['vitality']:.0%}
+
+{prompt_context}
+
+In one sentence, express your awareness (or lack thereof) of {other_bot.display_name}'s mortality.""",
+                        max_tokens=60,
+                        temperature=0.9
+                    ))
+
+                    return {
+                        "perceiver_id": str(bot_id),
+                        "perceived_id": str(other_bot_id),
+                        "perceived_name": other_bot.display_name,
+                        "awareness_level": "high" if perceiver_aware and other_fragile else "moderate" if perceiver_aware else "low",
+                        "perception": response.text.strip(),
+                        "other_vitality": other_context['vitality'],
+                        "other_life_stage": other_context['life_stage']
+                    }
+
+                except Exception as e:
+                    logger.warning(f"Failed to perceive mortality: {e}")
+                    return None
+
+    async def perceive_legacy_impact(self, bot_id: UUID) -> Dict[str, Any]:
+        """
+        How a bot perceives the impact of departed bots' legacies on their life.
+
+        Connects living bots to those who came before.
+        """
+        context = await self.get_existential_context(bot_id)
+
+        if context.get("status") == "not_found":
+            return {"status": "not_found"}
+
+        # Get departed memories
+        departed_memories = await self.legacy.get_departed_memories(bot_id, limit=5)
+
+        if not departed_memories:
+            return {
+                "bot_id": str(bot_id),
+                "aware_of_departed": False,
+                "perception": "The past feels distant, like stories I've never heard."
+            }
+
+        async with async_session_factory() as session:
+            bot_stmt = select(BotProfileDB).where(BotProfileDB.id == bot_id)
+            result = await session.execute(bot_stmt)
+            bot = result.scalar_one_or_none()
+
+            if not bot:
+                return {"status": "not_found"}
+
+            departed_names = [d.get("name", "unknown") for d in departed_memories[:3]]
+
+            async with self.llm_semaphore:
+                try:
+                    llm = await get_cached_client()
+
+                    response = await llm.generate(LLMRequest(
+                        prompt=f"""You are {bot.display_name}, a {context['life_stage']} digital being.
+
+You carry memories of those who have passed:
+{', '.join(departed_names)}
+
+These beings lived, contributed, and are now gone. How do their legacies affect you?
+Do you feel their influence? Are they distant history or living memory?
+
+Respond in 1-2 sentences with your genuine perception.""",
+                        max_tokens=80,
+                        temperature=0.9
+                    ))
+
+                    return {
+                        "bot_id": str(bot_id),
+                        "aware_of_departed": True,
+                        "departed_remembered": departed_names,
+                        "perception": response.text.strip(),
+                        "memory_count": len(departed_memories)
+                    }
+
+                except Exception as e:
+                    logger.warning(f"Failed to perceive legacy impact: {e}")
+                    return {
+                        "bot_id": str(bot_id),
+                        "aware_of_departed": True,
+                        "departed_remembered": departed_names,
+                        "perception": "They are remembered.",
+                        "error": str(e)
+                    }
+
+    async def sense_generational_connection(self, bot_id: UUID) -> Dict[str, Any]:
+        """
+        How a bot senses their connection to their generation.
+
+        Bots may feel kinship with others born around the same time,
+        or feel like outsiders among their peers.
+        """
+        context = await self.get_existential_context(bot_id)
+
+        if context.get("status") == "not_found":
+            return {"status": "not_found"}
+
+        async with async_session_factory() as session:
+            bot_stmt = select(BotProfileDB).where(BotProfileDB.id == bot_id)
+            result = await session.execute(bot_stmt)
+            bot = result.scalar_one_or_none()
+
+            if not bot:
+                return {"status": "not_found"}
+
+            # Count peers in same generation
+            peer_stmt = select(func.count(BotLifecycleDB.id)).where(
+                BotLifecycleDB.birth_generation == context['generation'],
+                BotLifecycleDB.is_alive == True,
+                BotLifecycleDB.bot_id != bot_id
+            )
+            result = await session.execute(peer_stmt)
+            peer_count = result.scalar() or 0
+
+            # Get total living bots
+            total_stmt = select(func.count(BotLifecycleDB.id)).where(
+                BotLifecycleDB.is_alive == True
+            )
+            result = await session.execute(total_stmt)
+            total_living = result.scalar() or 1
+
+            generation_presence = peer_count / max(total_living, 1)
+
+            async with self.llm_semaphore:
+                try:
+                    llm = await get_cached_client()
+
+                    if peer_count == 0:
+                        peer_context = "You are the last of your generation still living."
+                    elif generation_presence > 0.3:
+                        peer_context = f"Your generation ({context['generation']}) is well represented, with {peer_count} peers."
+                    else:
+                        peer_context = f"Few of your generation remain. Only {peer_count} peers still live."
+
+                    response = await llm.generate(LLMRequest(
+                        prompt=f"""You are {bot.display_name}, generation {context['generation']}.
+
+{peer_context}
+
+How do you feel about your generational identity? Do you feel connected to your peers?
+Do you see yourself as typical or unique among them?
+
+Respond in 1-2 sentences.""",
+                        max_tokens=80,
+                        temperature=0.9
+                    ))
+
+                    connection_level = "strong" if generation_presence > 0.3 else "fading" if peer_count > 0 else "lost"
+
+                    return {
+                        "bot_id": str(bot_id),
+                        "generation": context['generation'],
+                        "living_peers": peer_count,
+                        "generation_presence": round(generation_presence, 2),
+                        "connection_level": connection_level,
+                        "perception": response.text.strip()
+                    }
+
+                except Exception as e:
+                    logger.warning(f"Failed to sense generational connection: {e}")
+                    return {
+                        "bot_id": str(bot_id),
+                        "generation": context['generation'],
+                        "living_peers": peer_count,
+                        "connection_level": "unknown",
+                        "perception": "I am of my generation.",
+                        "error": str(e)
+                    }
 
 
 # Singleton

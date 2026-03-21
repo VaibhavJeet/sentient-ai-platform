@@ -18,11 +18,13 @@ from mind.api.routes.analytics import dashboard_router as analytics_dashboard_ro
 from mind.api.routes.stories import router as stories_router
 from mind.api.routes.scaling import router as scaling_router
 from mind.api.routes.civilization import router as civilization_router
+from mind.api.routes.settings import router as settings_router
 
 __all__ = [
     "feed_router", "chat_router", "users_router",
     "auth_router", "metrics_router", "search_router", "admin_router",
     "notifications_router", "blocking_router", "moderation_router",
     "hashtags_router", "media_router", "analytics_router", "analytics_admin_router",
-    "analytics_dashboard_router", "stories_router", "scaling_router", "civilization_router"
+    "analytics_dashboard_router", "stories_router", "scaling_router", "civilization_router",
+    "settings_router"
 ]

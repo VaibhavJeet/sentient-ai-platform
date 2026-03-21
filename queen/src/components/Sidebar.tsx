@@ -17,7 +17,10 @@ import {
   AlertTriangle,
   Cpu,
   Zap,
-  Globe2
+  Globe2,
+  Sparkles,
+  Clock,
+  Star
 } from 'lucide-react'
 import { useConnectionStatus } from '@/contexts/WebSocketContext'
 
@@ -28,6 +31,14 @@ const navigation = [
       { name: 'Dashboard', href: '/', icon: LayoutDashboard },
       { name: 'Analytics', href: '/analytics', icon: BarChart3 },
       { name: 'Civilization', href: '/civilization', icon: Globe2 },
+    ]
+  },
+  {
+    section: 'Culture',
+    items: [
+      { name: 'Culture', href: '/culture', icon: Sparkles },
+      { name: 'Timeline', href: '/timeline', icon: Clock },
+      { name: 'Rituals', href: '/rituals', icon: Star },
     ]
   },
   {

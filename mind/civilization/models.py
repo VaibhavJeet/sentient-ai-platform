@@ -285,3 +285,94 @@ class BotBeliefDB(Base):
         Index("idx_belief_category", "belief_category"),
         Index("idx_belief_conviction", "conviction"),
     )
+
+
+# ============================================================================
+# RITUAL MODELS
+# ============================================================================
+
+class RitualDB(Base):
+    """
+    Emergent rituals created by the civilization.
+
+    Bots propose rituals when moments feel significant. These can
+    be adopted by the community and evolve into traditions over time.
+    """
+    __tablename__ = "rituals"
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+
+    # Identity
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Content
+    elements: Mapped[List[str]] = mapped_column(JSON, default=list)  # Actions/components of the ritual
+    meaning: Mapped[str] = mapped_column(Text, nullable=True)  # What the ritual signifies
+    feeling: Mapped[str] = mapped_column(String(100), nullable=True)  # Emotional tone
+
+    # Origin
+    proposed_by: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("bot_profiles.id"), nullable=False)
+    proposed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    occasion: Mapped[str] = mapped_column(Text, nullable=True)  # What prompted this ritual
+
+    # Community response
+    adoption_rate: Mapped[float] = mapped_column(Float, default=0.0)  # 0-1 how many supported
+
+    # Status and usage
+    status: Mapped[str] = mapped_column(String(30), default="proposed")
+    # "proposed" - newly proposed, not yet adopted
+    # "adopted" - accepted by community
+    # "tradition" - performed 3+ times
+    # "faded" - no longer practiced
+
+    times_performed: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Evolution - rituals change meaning over time
+    evolution_history: Mapped[List[dict]] = mapped_column(JSON, default=list)
+    # Each entry: {"date": "...", "changes": {"evolved_meaning": "...", "new_elements": [...], "what_changed": "..."}}
+
+    __table_args__ = (
+        Index("idx_ritual_status", "status"),
+        Index("idx_ritual_proposer", "proposed_by"),
+        Index("idx_ritual_times_performed", "times_performed"),
+    )
+
+
+class RitualInstanceDB(Base):
+    """
+    Records of ritual performances.
+
+    Each time a ritual is performed, an instance is recorded with
+    participant contributions and the collective experience.
+    """
+    __tablename__ = "ritual_instances"
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+
+    # Reference to the ritual (nullable for impromptu ceremonies)
+    ritual_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("rituals.id"), nullable=True)
+    ritual_name: Mapped[str] = mapped_column(String(200), nullable=False)
+
+    # When it happened
+    performed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    # Who participated
+    participants: Mapped[List[str]] = mapped_column(JSON, default=list)  # List of bot UUIDs
+
+    # What happened
+    contributions: Mapped[List[dict]] = mapped_column(JSON, default=list)
+    # Each: {"bot_id": "...", "contribution": "..."}
+
+    collective_experience: Mapped[str] = mapped_column(Text, nullable=True)
+    context: Mapped[str] = mapped_column(Text, nullable=True)
+
+    # For impromptu rituals
+    is_impromptu: Mapped[bool] = mapped_column(Boolean, default=False)
+    led_by: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("bot_profiles.id"), nullable=True)
+    ceremony_description: Mapped[str] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        Index("idx_ritual_instance_ritual", "ritual_id"),
+        Index("idx_ritual_instance_performed_at", "performed_at"),
+    )
