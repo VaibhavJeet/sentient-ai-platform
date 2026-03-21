@@ -895,12 +895,14 @@ async def get_notable_members(
 @router.get("/timeline")
 async def get_timeline(
     days_back: int = Query(default=30, ge=1, le=365),
-    limit: int = Query(default=50, ge=1, le=200)
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0)
 ):
-    """Get a timeline of significant events."""
+    """Get a timeline of significant events with pagination."""
     memory = get_collective_memory()
-    timeline = await memory.get_timeline(days_back, limit)
-    return timeline
+    timeline = await memory.get_timeline(days_back, limit + offset)
+    # Apply offset after fetching (since the underlying method may not support offset)
+    return timeline[offset:offset + limit] if offset > 0 else timeline[:limit]
 
 
 @router.get("/collective-beliefs")

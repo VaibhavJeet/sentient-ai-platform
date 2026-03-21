@@ -696,6 +696,68 @@ class _TimelineScreenState extends State<TimelineScreen> {
   bool _hasMore = true;
   bool _isLoadingMore = false;
 
+  // Filter state
+  static const List<String> _eventTypes = [
+    'birth',
+    'death',
+    'ritual',
+    'era_change',
+    'cultural',
+  ];
+  Set<String> _selectedFilters = {};
+
+  List<dynamic> get _filteredEvents {
+    if (_selectedFilters.isEmpty) return _events;
+    return _events.where((event) {
+      final type = (event['type'] ?? '').toString().toLowerCase();
+      return _selectedFilters.contains(type);
+    }).toList();
+  }
+
+  void _toggleFilter(String filter) {
+    setState(() {
+      if (_selectedFilters.contains(filter)) {
+        _selectedFilters.remove(filter);
+      } else {
+        _selectedFilters.add(filter);
+      }
+    });
+  }
+
+  String _getFilterLabel(String type) {
+    switch (type) {
+      case 'birth':
+        return 'Birth';
+      case 'death':
+        return 'Death';
+      case 'ritual':
+        return 'Ritual';
+      case 'era_change':
+        return 'Era';
+      case 'cultural':
+        return 'Cultural';
+      default:
+        return type;
+    }
+  }
+
+  Color _getFilterColor(String type) {
+    switch (type) {
+      case 'birth':
+        return AppTheme.semanticGreen;
+      case 'death':
+        return AppTheme.neonPurple;
+      case 'ritual':
+        return AppTheme.semanticYellow;
+      case 'era_change':
+        return AppTheme.semanticBlue;
+      case 'cultural':
+        return AppTheme.neonMagenta;
+      default:
+        return AppTheme.textMuted;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -773,6 +835,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
         child: Column(
           children: [
             _buildHeader(),
+            _buildFilterChips(),
             Expanded(
               child: _isLoading
                   ? _buildLoadingState()
@@ -835,6 +898,95 @@ class _TimelineScreenState extends State<TimelineScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChips() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppTheme.bg,
+        border: Border(
+          bottom: BorderSide(color: AppTheme.border, width: 1),
+        ),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            // "All" chip
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: GestureDetector(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  setState(() => _selectedFilters.clear());
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _selectedFilters.isEmpty
+                        ? AppTheme.semanticBlue.withValues(alpha: 0.2)
+                        : AppTheme.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: _selectedFilters.isEmpty
+                          ? AppTheme.semanticBlue
+                          : AppTheme.border,
+                      width: 1,
+                    ),
+                  ),
+                  child: Text(
+                    'All',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: _selectedFilters.isEmpty
+                          ? AppTheme.semanticBlue
+                          : AppTheme.textMuted,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // Event type chips
+            ..._eventTypes.map((type) {
+              final isSelected = _selectedFilters.contains(type);
+              final color = _getFilterColor(type);
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    _toggleFilter(type);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? color.withValues(alpha: 0.2)
+                          : AppTheme.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isSelected ? color : AppTheme.border,
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      _getFilterLabel(type),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: isSelected ? color : AppTheme.textMuted,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
       ),
     );
   }

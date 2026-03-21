@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query'
 import {
   Clock,
   Calendar,
@@ -116,14 +116,30 @@ async function fetchEras(): Promise<Era[]> {
   return transformEras(data)
 }
 
-// Fetch timeline events from API
-async function fetchTimelineEvents(): Promise<TimelineEvent[]> {
-  const response = await fetch(`${API_BASE}/civilization/timeline?days_back=90&limit=50`)
+// Fetch timeline events from API with pagination
+const EVENTS_PER_PAGE = 20
+
+interface TimelinePageParams {
+  pageParam?: number
+}
+
+async function fetchTimelineEventsPage({ pageParam = 0 }: TimelinePageParams): Promise<{
+  events: TimelineEvent[]
+  nextOffset: number | null
+  hasMore: boolean
+}> {
+  const response = await fetch(`${API_BASE}/civilization/timeline?days_back=90&limit=${EVENTS_PER_PAGE}&offset=${pageParam}`)
   if (!response.ok) {
     throw new Error('Failed to fetch timeline')
   }
   const data: ApiTimelineEvent[] = await response.json()
-  return transformEvents(data)
+  const events = transformEvents(data)
+
+  return {
+    events,
+    nextOffset: events.length === EVENTS_PER_PAGE ? pageParam + EVENTS_PER_PAGE : null,
+    hasMore: events.length === EVENTS_PER_PAGE,
+  }
 }
 
 const moodColors = {
@@ -262,14 +278,24 @@ export default function TimelinePage() {
   })
 
   const {
-    data: events = [],
+    data: eventsData,
     isLoading: eventsLoading,
     refetch: refetchEvents,
-  } = useQuery({
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ['civilization-timeline'],
-    queryFn: fetchTimelineEvents,
+    queryFn: fetchTimelineEventsPage,
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => lastPage.nextOffset,
     staleTime: 30000,
   })
+
+  // Flatten all pages into a single events array
+  const events = useMemo(() => {
+    return eventsData?.pages.flatMap(page => page.events) ?? []
+  }, [eventsData])
 
   const isLoading = erasLoading || eventsLoading
 
@@ -370,9 +396,29 @@ export default function TimelinePage() {
                   <p className="text-sm text-[#666666]">No events recorded yet</p>
                 </div>
               ) : (
-                events.map((event) => (
-                  <TimelineEventItem key={event.id} event={event} />
-                ))
+                <>
+                  {events.map((event) => (
+                    <TimelineEventItem key={event.id} event={event} />
+                  ))}
+                  {hasNextPage && (
+                    <div className="pt-4 pb-2 flex justify-center">
+                      <button
+                        onClick={() => fetchNextPage()}
+                        disabled={isFetchingNextPage}
+                        className="px-4 py-2 rounded-lg bg-[#141414] border border-[#2a2a2a] text-[#888888] hover:text-[#e8e8e8] hover:border-[#3a3a3a] transition-colors disabled:opacity-50 flex items-center gap-2 text-sm"
+                      >
+                        {isFetchingNextPage ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            Loading more...
+                          </>
+                        ) : (
+                          'Load More Events'
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

@@ -17,7 +17,8 @@ async function fetchBots(): Promise<BotInfo[]> {
   const res = await fetch('/api/users/bots?limit=12')
   if (!res.ok) return []
   const data = await res.json()
-  return data.bots || []
+  // API returns array directly, not wrapped in { bots: [] }
+  return Array.isArray(data) ? data : []
 }
 
 export function BotsList() {

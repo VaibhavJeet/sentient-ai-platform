@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query'
 import {
   FileText,
   Search,
@@ -142,24 +142,55 @@ function generateMockStats(): PostStats {
   }
 }
 
-function generateMockComments(): Comment[] {
-  return Array.from({ length: 8 }, (_, i) => ({
-    id: `CMT-${1000 + i}`,
-    author_name: `Commenter_${i + 1}`,
-    author_avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=comment${i}`,
-    content: [
-      'Great post! Really insightful.',
-      'I disagree with this take, but interesting perspective.',
-      'Can you share more details about this?',
-      'This is exactly what I was looking for!',
-      'Bookmarked for later reference.',
-      'The community needs more content like this.',
-      'Interesting point, but have you considered...',
-      'This changed my perspective completely.',
-    ][i],
-    timestamp: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000).toISOString(),
-    likes: Math.floor(Math.random() * 100),
-  }))
+// Total number of mock comments for pagination demo
+const TOTAL_MOCK_COMMENTS = 25
+
+function generateMockComments(offset: number = 0, limit: number = COMMENTS_PER_PAGE): { comments: Comment[], hasMore: boolean, total: number } {
+  const commentTexts = [
+    'Great post! Really insightful.',
+    'I disagree with this take, but interesting perspective.',
+    'Can you share more details about this?',
+    'This is exactly what I was looking for!',
+    'Bookmarked for later reference.',
+    'The community needs more content like this.',
+    'Interesting point, but have you considered...',
+    'This changed my perspective completely.',
+    'I learned something new today!',
+    'This deserves more attention.',
+    'Can someone explain this further?',
+    'Amazing contribution to the discussion.',
+    'Not sure I agree, but well written.',
+    'Following this thread for updates.',
+    'This is why I love this community.',
+    'Quality content right here.',
+    'Has anyone tried this approach?',
+    'Would love to see a follow-up on this.',
+    'Mind = blown. Thanks for sharing!',
+    'Saving this for later reference.',
+    'The detail here is impressive.',
+    'Great analysis, very thorough.',
+    'This needs to be shared more widely.',
+    'Excellent points all around.',
+    'Looking forward to more posts like this.',
+  ]
+
+  const comments = Array.from({ length: Math.min(limit, TOTAL_MOCK_COMMENTS - offset) }, (_, i) => {
+    const idx = offset + i
+    return {
+      id: `CMT-${1000 + idx}`,
+      author_name: `Commenter_${idx + 1}`,
+      author_avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=comment${idx}`,
+      content: commentTexts[idx % commentTexts.length],
+      timestamp: new Date(Date.now() - (idx + 1) * 2 * 60 * 60 * 1000).toISOString(),
+      likes: Math.floor(Math.random() * 100),
+    }
+  })
+
+  return {
+    comments,
+    hasMore: offset + limit < TOTAL_MOCK_COMMENTS,
+    total: TOTAL_MOCK_COMMENTS,
+  }
 }
 
 // Transform API response to match component's Post type
@@ -188,17 +219,51 @@ function transformApiPost(apiPost: PostListItem): Post {
   }
 }
 
-// API fetchers
-async function fetchPosts(): Promise<Post[]> {
+// Pagination constants
+const POSTS_PER_PAGE = 20
+const COMMENTS_PER_PAGE = 5
+
+// API fetchers with pagination
+interface PostsPageParams {
+  pageParam?: number
+}
+
+async function fetchPostsPage({ pageParam = 0 }: PostsPageParams): Promise<{
+  posts: Post[]
+  nextOffset: number | null
+  hasMore: boolean
+}> {
   try {
-    const apiPosts = await adminApi.listPosts({ limit: 50, include_deleted: true })
+    const apiPosts = await adminApi.listPosts({
+      limit: POSTS_PER_PAGE,
+      offset: pageParam,
+      include_deleted: true
+    })
     if (apiPosts?.length) {
-      return apiPosts.map(transformApiPost)
+      const posts = apiPosts.map(transformApiPost)
+      return {
+        posts,
+        nextOffset: posts.length === POSTS_PER_PAGE ? pageParam + POSTS_PER_PAGE : null,
+        hasMore: posts.length === POSTS_PER_PAGE,
+      }
     }
-    return generateMockPosts()
+    // Fall back to mock data for demo
+    const mockPosts = generateMockPosts()
+    const paginatedMock = mockPosts.slice(pageParam, pageParam + POSTS_PER_PAGE)
+    return {
+      posts: paginatedMock,
+      nextOffset: pageParam + POSTS_PER_PAGE < mockPosts.length ? pageParam + POSTS_PER_PAGE : null,
+      hasMore: pageParam + POSTS_PER_PAGE < mockPosts.length,
+    }
   } catch (error) {
     console.error('Failed to fetch posts from API:', error)
-    return generateMockPosts()
+    const mockPosts = generateMockPosts()
+    const paginatedMock = mockPosts.slice(pageParam, pageParam + POSTS_PER_PAGE)
+    return {
+      posts: paginatedMock,
+      nextOffset: pageParam + POSTS_PER_PAGE < mockPosts.length ? pageParam + POSTS_PER_PAGE : null,
+      hasMore: pageParam + POSTS_PER_PAGE < mockPosts.length,
+    }
   }
 }
 
@@ -315,8 +380,33 @@ function PostDetailModal({
   onClose: () => void
   onAction: (action: string, postId: string) => void
 }) {
-  const comments = useMemo(() => generateMockComments(), [])
   const [activeSection, setActiveSection] = useState<'comments' | 'history'>('comments')
+  const [commentsOffset, setCommentsOffset] = useState(0)
+  const [allComments, setAllComments] = useState<Comment[]>([])
+  const [hasMoreComments, setHasMoreComments] = useState(true)
+  const [isLoadingComments, setIsLoadingComments] = useState(false)
+  const [totalComments, setTotalComments] = useState(0)
+
+  // Load initial comments
+  useEffect(() => {
+    const { comments, hasMore, total } = generateMockComments(0, COMMENTS_PER_PAGE)
+    setAllComments(comments)
+    setHasMoreComments(hasMore)
+    setTotalComments(total)
+    setCommentsOffset(COMMENTS_PER_PAGE)
+  }, [])
+
+  const loadMoreComments = useCallback(() => {
+    setIsLoadingComments(true)
+    // Simulate async loading
+    setTimeout(() => {
+      const { comments, hasMore } = generateMockComments(commentsOffset, COMMENTS_PER_PAGE)
+      setAllComments(prev => [...prev, ...comments])
+      setHasMoreComments(hasMore)
+      setCommentsOffset(prev => prev + COMMENTS_PER_PAGE)
+      setIsLoadingComments(false)
+    }, 300)
+  }, [commentsOffset])
 
   // Mock engagement data - deterministic based on post data
   const engagementData = useMemo(() => {
@@ -569,10 +659,10 @@ function PostDetailModal({
                 <div className="p-4 rounded-lg bg-[#1a1a2e]/80 border border-[#252538]">
                   <h3 className="text-sm font-mono text-[#00f0ff] uppercase tracking-wider mb-3 flex items-center gap-2">
                     <MessageSquare className="w-4 h-4" />
-                    Comments ({post.comments_count})
+                    Comments ({totalComments})
                   </h3>
                   <div className="space-y-3 max-h-96 overflow-y-auto">
-                    {comments.map((comment) => (
+                    {allComments.map((comment) => (
                       <div
                         key={comment.id}
                         className="p-3 rounded-lg bg-[#12121a] border border-[#252538]"
@@ -602,6 +692,22 @@ function PostDetailModal({
                         </div>
                       </div>
                     ))}
+                    {hasMoreComments && (
+                      <button
+                        onClick={loadMoreComments}
+                        disabled={isLoadingComments}
+                        className="w-full py-2 rounded-lg bg-[#12121a] border border-[#252538] text-[#606080] hover:text-[#00f0ff] hover:border-[#00f0ff]/30 transition-colors text-sm font-mono disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {isLoadingComments ? (
+                          <>
+                            <RefreshCw className="w-3 h-3 animate-spin" />
+                            Loading...
+                          </>
+                        ) : (
+                          `Load More (${allComments.length}/${totalComments})`
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -673,12 +779,27 @@ export default function PostsManagementPage() {
   })
   const [showDateFilter, setShowDateFilter] = useState(false)
 
-  // Fetch data
-  const { data: posts = [], isLoading: postsLoading, error: postsError, refetch } = useQuery({
+  // Fetch data with pagination
+  const {
+    data: postsData,
+    isLoading: postsLoading,
+    error: postsError,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ['admin-posts'],
-    queryFn: fetchPosts,
+    queryFn: fetchPostsPage,
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => lastPage.nextOffset,
     refetchInterval: 30000,
   })
+
+  // Flatten all pages into a single posts array
+  const posts = useMemo(() => {
+    return postsData?.pages.flatMap(page => page.posts) ?? []
+  }, [postsData])
 
   const { data: stats, error: statsError, refetch: refetchStats } = useQuery({
     queryKey: ['admin-posts-stats'],
@@ -1184,6 +1305,29 @@ export default function PostsManagementPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Load More Button */}
+        {hasNextPage && (
+          <div className="p-4 border-t border-[#252538] flex justify-center">
+            <button
+              onClick={() => fetchNextPage()}
+              disabled={isFetchingNextPage}
+              className="px-6 py-2 rounded-lg bg-[#1a1a2e] border border-[#252538] text-[#a0a0b0] hover:text-[#00f0ff] hover:border-[#00f0ff]/30 transition-colors font-mono text-sm disabled:opacity-50 flex items-center gap-2"
+            >
+              {isFetchingNextPage ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Loading more posts...
+                </>
+              ) : (
+                <>
+                  Load More Posts
+                  <span className="text-xs text-[#606080]">({posts.length} loaded)</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </GlowCard>
 
         {/* Post Detail Modal */}
