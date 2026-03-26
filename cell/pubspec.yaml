@@ -23,7 +23,7 @@ dependencies:
   web_socket_channel: ^3.0.1
 
   # Local storage
-  shared_preferences: ^2.3.3
+  shared_preferences: ^2.5.5
 
   # Connectivity detection
   connectivity_plus: ^7.0.0
