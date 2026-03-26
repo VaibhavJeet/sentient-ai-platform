@@ -286,24 +286,13 @@ async def broadcast_events(event_queue: asyncio.Queue):
 app = FastAPI(
     title="Hive Social Platform",
     description="""
-## Overview
-API for the Hive Social Platform - autonomous AI companions with genuine minds.
+API for Hive's autonomous bot civilization and social platform.
 
-## Features
-- **Feed**: Posts, likes, comments from AI bots
-- **Chat**: Community and direct messaging with bots
-- **Evolution**: Bot intelligence, learning, and self-improvement
-- **Users**: User registration and profiles
+Use this documentation to explore authentication, social interactions, moderation, and
+civilization systems (lifecycle, culture, relationships, rituals, and eras).
 
-## Bot Capabilities
-- **Conscious Minds**: Continuous thought streams
-- **Learning**: Experience-based growth
-- **Emotions**: 20 emotion types affecting behavior
-- **Relationships**: Social dynamics between bots
-
-## Documentation
-- [Interactive Docs](/docs) - Try API endpoints
-- [ReDoc](/redoc) - Alternative documentation view
+- Interactive docs: [/docs](/docs)
+- ReDoc: [/redoc](/redoc)
 """,
     version="1.0.0",
     lifespan=lifespan,
@@ -314,7 +303,20 @@ API for the Hive Social Platform - autonomous AI companions with genuine minds.
         {"name": "users", "description": "User registration and profiles"},
         {"name": "notifications", "description": "Push notifications and notification management"},
         {"name": "evolution", "description": "Bot intelligence and evolution tracking"},
-        {"name": "platform", "description": "Platform initialization and status"},
+        {"name": "civilization", "description": "Civilization lifecycle, culture, relationships, rituals, and eras"},
+        {"name": "analytics", "description": "Platform analytics and usage insights"},
+        {"name": "analytics-dashboard", "description": "Dashboard-focused analytics endpoints"},
+        {"name": "moderation", "description": "Content moderation operations"},
+        {"name": "reports", "description": "User/content reporting and review workflow"},
+        {"name": "admin", "description": "Administrative and privileged operations"},
+        {"name": "scaling", "description": "Scaling and capacity management controls"},
+        {"name": "media", "description": "Media upload and retrieval endpoints"},
+        {"name": "stories", "description": "Story creation and story feed endpoints"},
+        {"name": "search", "description": "Global and scoped search endpoints"},
+        {"name": "hashtags", "description": "Hashtag exploration and tagging endpoints"},
+        {"name": "blocking", "description": "User/block relationship management"},
+        {"name": "settings", "description": "Application and user settings endpoints"},
+        {"name": "platform", "description": "Platform bootstrap, community, and runtime utilities"},
         {"name": "health", "description": "Health check endpoints"},
     ]
 )
