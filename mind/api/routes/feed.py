@@ -7,7 +7,7 @@ from typing import List, Optional
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 import re
 import html
 from sqlalchemy import select, func, desc
@@ -84,6 +84,19 @@ def sanitize_content(content: str) -> str:
 
 
 class CreatePostRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "community_id": "123e4567-e89b-12d3-a456-426614174000",
+                    "content": "Hello from the feed! Excited to explore this community.",
+                    "image_url": None,
+                    "media_id": None,
+                }
+            ]
+        }
+    )
+
     community_id: UUID
     content: str = Field(..., min_length=1, max_length=2000, description="Post content")
     image_url: Optional[str] = Field(None, max_length=500)
@@ -110,6 +123,18 @@ class CreatePostRequest(BaseModel):
 
 
 class CreateCommentRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "post_id": "123e4567-e89b-12d3-a456-426614174000",
+                    "content": "Great post — thanks for sharing!",
+                    "parent_comment_id": None,
+                }
+            ]
+        }
+    )
+
     post_id: UUID
     content: str = Field(..., min_length=1, max_length=1000, description="Comment content")
     parent_comment_id: Optional[UUID] = None
@@ -124,6 +149,12 @@ class CreateCommentRequest(BaseModel):
 
 
 class LikePostRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [{"post_id": "123e4567-e89b-12d3-a456-426614174000"}]
+        }
+    )
+
     post_id: UUID
 
 
@@ -131,7 +162,15 @@ class LikePostRequest(BaseModel):
 # FEED ENDPOINTS
 # ============================================================================
 
-@router.get("/posts", response_model=List[PostResponse])
+@router.get(
+    "/posts",
+    response_model=List[PostResponse],
+    summary="List feed posts",
+    description=(
+        "Paginated posts, newest first. Optional **user_id** filters likes and blocks; "
+        "**community_id** limits to one community."
+    ),
+)
 @handle_errors(default_error=DatabaseError)
 async def get_feed(
     user_id: Optional[UUID] = None,
@@ -257,7 +296,12 @@ async def get_feed(
         return posts
 
 
-@router.get("/posts/{post_id}", response_model=PostResponse)
+@router.get(
+    "/posts/{post_id}",
+    response_model=PostResponse,
+    summary="Get one post",
+    description="Full post with all comments. **user_id** enables per-user like state and blocking.",
+)
 @handle_errors(default_error=DatabaseError)
 async def get_post(post_id: UUID, user_id: Optional[UUID] = None):
     """Get a single post with all comments."""
@@ -367,7 +411,11 @@ async def get_post(post_id: UUID, user_id: Optional[UUID] = None):
         )
 
 
-@router.post("/posts/{post_id}/like")
+@router.post(
+    "/posts/{post_id}/like",
+    summary="Like a post",
+    description="**user_id** is the liker (human user or bot id). Idempotent if already liked.",
+)
 @handle_errors(default_error=DatabaseError)
 async def like_post(post_id: UUID, user_id: UUID, is_bot: bool = False):
     """
@@ -427,7 +475,11 @@ async def like_post(post_id: UUID, user_id: UUID, is_bot: bool = False):
             return {"status": "already_liked", "like_count": post.like_count if post else 0}
 
 
-@router.delete("/posts/{post_id}/like")
+@router.delete(
+    "/posts/{post_id}/like",
+    summary="Unlike a post",
+    description="Removes **user_id**'s like from the post.",
+)
 @handle_errors(default_error=DatabaseError)
 async def unlike_post(post_id: UUID, user_id: UUID):
     """Unlike a post."""
@@ -455,7 +507,12 @@ async def unlike_post(post_id: UUID, user_id: UUID):
         return {"status": "unliked", "like_count": post.like_count if post else 0}
 
 
-@router.post("/posts/{post_id}/comments", response_model=CommentResponse)
+@router.post(
+    "/posts/{post_id}/comments",
+    response_model=CommentResponse,
+    summary="Create a comment",
+    description="Adds a comment; **user_id** is the author. Content may be moderated for humans.",
+)
 @handle_errors(default_error=DatabaseError)
 async def create_comment(
     post_id: UUID,
@@ -530,7 +587,11 @@ async def create_comment(
         )
 
 
-@router.get("/posts/{post_id}/likers", response_model=List[AuthorInfo])
+@router.get(
+    "/posts/{post_id}/likers",
+    response_model=List[AuthorInfo],
+    summary="List users who liked a post",
+)
 @handle_errors(default_error=DatabaseError)
 async def get_post_likers(post_id: UUID, limit: int = 50, offset: int = 0):
     """Get all users who liked a post."""
@@ -560,7 +621,12 @@ async def get_post_likers(post_id: UUID, limit: int = 50, offset: int = 0):
         return likers
 
 
-@router.get("/posts/{post_id}/comments", response_model=List[CommentResponse])
+@router.get(
+    "/posts/{post_id}/comments",
+    response_model=List[CommentResponse],
+    summary="List comments on a post",
+    description="All comments in chronological order; respects **user_id** blocking.",
+)
 @handle_errors(default_error=DatabaseError)
 async def get_comments(
     post_id: UUID,

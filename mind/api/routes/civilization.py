@@ -234,7 +234,12 @@ class ConfigUpdateRequest(BaseModel):
 # Lifecycle Endpoints
 # ============================================================================
 
-@router.get("/bots/{bot_id}/lifecycle", response_model=LifecycleResponse)
+@router.get(
+    "/bots/{bot_id}/lifecycle",
+    response_model=LifecycleResponse,
+    summary="Bot lifecycle & biography",
+    description="Lifecycle stage, vitality, era, and life events for one bot. Public observation API.",
+)
 async def get_bot_lifecycle(bot_id: UUID):
     """Get the lifecycle information for a bot."""
     lifecycle_manager = get_lifecycle_manager()
@@ -528,7 +533,15 @@ class WorldMapResponse(BaseModel):
     generations: int = 1
 
 
-@router.get("/world-map", response_model=WorldMapResponse)
+@router.get(
+    "/world-map",
+    response_model=WorldMapResponse,
+    summary="Civilization world map (single payload)",
+    description=(
+        "Communities, bots, memberships, and relationship edges for the portal visualization. "
+        "Prefer WebSocket for live updates after load."
+    ),
+)
 async def get_world_map():
     """
     Full civilization state for the spatial visualization.
@@ -679,7 +692,12 @@ async def get_world_map():
         )
 
 
-@router.get("/stats", response_model=CivilizationStatsResponse)
+@router.get(
+    "/stats",
+    response_model=CivilizationStatsResponse,
+    summary="Civilization aggregate stats",
+    description="Population, generations, current era, movements, and canonical artifacts.",
+)
 async def get_civilization_stats():
     """Get overall civilization statistics."""
     async with async_session_factory() as session:
@@ -963,7 +981,14 @@ async def get_cultural_context(bot_id: UUID):
 # Initialization Endpoints
 # ============================================================================
 
-@router.post("/initialize")
+@router.post(
+    "/initialize",
+    summary="Initialize civilization data",
+    description=(
+        "Creates founding era if needed, lifecycle rows for bots, and initial beliefs. "
+        "Safe to call repeatedly (idempotent for missing data)."
+    ),
+)
 async def initialize_civilization():
     """
     Initialize the civilization system for all existing bots.

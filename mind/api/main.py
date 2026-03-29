@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from mind.config.settings import settings
 from sqlalchemy import select
@@ -400,6 +400,21 @@ app.include_router(settings_router)
 # ============================================================================
 
 class CreateCommunityRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "name": "Night Owls Collective",
+                    "description": "Late-night thinkers and creators.",
+                    "theme": "cosmic",
+                    "tone": "warm",
+                    "topics": ["philosophy", "art", "music"],
+                    "initial_bot_count": 50,
+                }
+            ]
+        }
+    )
+
     name: str
     description: str
     theme: str
@@ -432,6 +447,19 @@ class BotResponse(BaseModel):
 
 
 class MessageRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "bot_id": "123e4567-e89b-12d3-a456-426614174000",
+                    "conversation_id": "dm-user-550e8400-bot-123e4567",
+                    "content": "What have you been reflecting on lately?",
+                    "is_direct_message": True,
+                }
+            ]
+        }
+    )
+
     bot_id: UUID
     conversation_id: str
     content: str
@@ -457,13 +485,23 @@ class PlatformStatsResponse(BaseModel):
 # HEALTH ENDPOINTS
 # ============================================================================
 
-@app.get("/health")
+@app.get(
+    "/health",
+    tags=["health"],
+    summary="Liveness check",
+    description="Returns `healthy` if the process is up. No authentication required.",
+)
 async def health_check():
     """Basic health check."""
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 
-@app.get("/health/detailed")
+@app.get(
+    "/health/detailed",
+    tags=["health"],
+    summary="Detailed health",
+    description="Includes LLM and scheduler status. May report `degraded` if the LLM is unreachable.",
+)
 async def detailed_health():
     """Detailed health check with component status."""
     llm_client = await get_llm_client()
@@ -484,7 +522,13 @@ async def detailed_health():
 # COMMUNITY ENDPOINTS
 # ============================================================================
 
-@app.get("/communities", response_model=List[CommunityResponse])
+@app.get(
+    "/communities",
+    response_model=List[CommunityResponse],
+    tags=["platform"],
+    summary="List communities",
+    description="All communities, newest first.",
+)
 async def list_communities():
     """List all communities."""
     from sqlalchemy import select
@@ -509,7 +553,13 @@ async def list_communities():
         ]
 
 
-@app.post("/communities", response_model=CommunityResponse)
+@app.post(
+    "/communities",
+    response_model=CommunityResponse,
+    tags=["platform"],
+    summary="Create a community",
+    description="Creates a community and seeds **initial_bot_count** AI companions.",
+)
 async def create_community(request: CreateCommunityRequest):
     """Create a new community with AI companions."""
     async with async_session_factory() as session:
@@ -534,7 +584,12 @@ async def create_community(request: CreateCommunityRequest):
         )
 
 
-@app.get("/communities/{community_id}", response_model=CommunityResponse)
+@app.get(
+    "/communities/{community_id}",
+    response_model=CommunityResponse,
+    tags=["platform"],
+    summary="Get community by ID",
+)
 async def get_community(community_id: UUID):
     """Get community details."""
     from sqlalchemy import select
@@ -559,7 +614,12 @@ async def get_community(community_id: UUID):
         )
 
 
-@app.get("/communities/{community_id}/bots", response_model=List[BotResponse])
+@app.get(
+    "/communities/{community_id}/bots",
+    response_model=List[BotResponse],
+    tags=["platform"],
+    summary="List bots in a community",
+)
 async def get_community_bots(community_id: UUID, limit: int = 50):
     """Get AI companions in a community."""
     from sqlalchemy import select
@@ -597,7 +657,16 @@ async def get_community_bots(community_id: UUID, limit: int = 50):
 # BOT INTERACTION ENDPOINTS
 # ============================================================================
 
-@app.post("/bots/{bot_id}/message", response_model=MessageResponse)
+@app.post(
+    "/bots/{bot_id}/message",
+    response_model=MessageResponse,
+    tags=["platform"],
+    summary="Send a message to a bot (full DM pipeline)",
+    description=(
+        "Runs memory recall, LLM generation, emotional update, and persistence. "
+        "Requires a working LLM (Ollama) for non-error responses."
+    ),
+)
 async def send_message_to_bot(bot_id: UUID, request: MessageRequest):
     """
     Send a message to an AI companion and get a response.
@@ -724,7 +793,12 @@ async def send_message_to_bot(bot_id: UUID, request: MessageRequest):
 # PLATFORM MANAGEMENT ENDPOINTS
 # ============================================================================
 
-@app.post("/platform/initialize")
+@app.post(
+    "/platform/initialize",
+    tags=["platform"],
+    summary="Initialize platform",
+    description="Creates **num_communities** communities and seeds bots via the orchestrator.",
+)
 async def initialize_platform(num_communities: int = 10):
     """Initialize the platform with communities and bots."""
     communities = await app.state.orchestrator.initialize_platform(
@@ -741,7 +815,13 @@ async def initialize_platform(num_communities: int = 10):
     }
 
 
-@app.get("/platform/stats", response_model=PlatformStatsResponse)
+@app.get(
+    "/platform/stats",
+    response_model=PlatformStatsResponse,
+    tags=["platform"],
+    summary="Platform statistics",
+    description="Aggregated community/bot counts plus LLM and scheduler stats.",
+)
 async def get_platform_stats():
     """Get platform-wide statistics."""
     stats = await app.state.orchestrator.get_platform_stats()
